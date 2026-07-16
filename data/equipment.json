@@ -1,0 +1,17 @@
+[
+  {
+    "type": "Laufband",
+    "name": "Sportstech F37s",
+    "status": "verfügbar"
+  },
+  {
+    "type": "Rudergerät",
+    "name": "Skandika Njord",
+    "status": "verfügbar"
+  },
+  {
+    "type": "Fahrrad",
+    "name": "Rad",
+    "status": "verfügbar"
+  }
+]

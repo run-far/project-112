@@ -1,0 +1,24 @@
+{
+  "byType": [
+    {
+      "label": "🔵 Easy",
+      "km": 0
+    },
+    {
+      "label": "🔑 Longrun",
+      "km": 20.03
+    },
+    {
+      "label": "🔥 Intervalle",
+      "km": 0
+    },
+    {
+      "label": "📌 ORC",
+      "km": 0
+    },
+    {
+      "label": "⚽ Fußball",
+      "km": 0
+    }
+  ]
+}
