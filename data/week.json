@@ -1,0 +1,91 @@
+{
+  "label": "13.–19. Juli 2026",
+  "currentKm": 20.03,
+  "goalKm": 45,
+  "footballKm": 0,
+  "bikeKm": 0,
+  "rowMinutes": 0,
+  "stabiDone": 0,
+  "stabiGoal": 0,
+  "score": "9.5",
+  "next": {
+    "title": "🔵 Easy Run – 8–10 km",
+    "details": "Ganztag · locker · ohne Tempodruck"
+  },
+  "focus": {
+    "title": "Belastung verarbeiten und gesund bleiben",
+    "text": "Die Berg-Einheit war der Hauptreiz. Samstag sind ORC-Intervalle gesetzt. Stabi und Rudern werden ab nächster Woche gezielt ergänzt."
+  },
+  "events": [
+    {
+      "day": "Mo",
+      "title": "🔑⛰️ Bayernrunde",
+      "time": "Ganztag",
+      "status": "✅ Erledigt",
+      "planned": "18,8 km · 440 HM",
+      "actual": "20,03 km · 510 HM",
+      "reason": "Strecke war etwas länger und höhenreicher als geplant.",
+      "learning": "Mit zusätzlichem Gel und mehr Wasser wären weitere 5 km möglich gewesen."
+    },
+    {
+      "day": "Di",
+      "title": "Ruhetag",
+      "time": "Ganztag",
+      "status": "✅ Erledigt",
+      "planned": "Regeneration",
+      "actual": "Regeneration",
+      "reason": "",
+      "learning": ""
+    },
+    {
+      "day": "Mi",
+      "title": "📌🏃 ORC Run",
+      "time": "19:00 Uhr",
+      "status": "✅ Erledigt",
+      "planned": "ORC Gruppenlauf",
+      "actual": "Erledigt",
+      "reason": "",
+      "learning": ""
+    },
+    {
+      "day": "Do",
+      "title": "🔵 Easy Run",
+      "time": "Ganztag",
+      "status": "🗓 Geplant",
+      "planned": "8–10 km locker",
+      "actual": "",
+      "reason": "",
+      "learning": ""
+    },
+    {
+      "day": "Fr",
+      "title": "🟢 Optional: Easy Run oder Rad",
+      "time": "Ganztag",
+      "status": "🟢 Optional",
+      "planned": "6–8 km easy oder 60–75 Min Rad",
+      "actual": "",
+      "reason": "",
+      "learning": ""
+    },
+    {
+      "day": "Sa",
+      "title": "📌🔥 ORC Intervalle",
+      "time": "09:00 Uhr",
+      "status": "📌 Fix",
+      "planned": "ORC Intervalltraining",
+      "actual": "",
+      "reason": "",
+      "learning": ""
+    },
+    {
+      "day": "So",
+      "title": "🟢 Optional: Recovery Run",
+      "time": "Ganztag",
+      "status": "🟢 Optional",
+      "planned": "5–8 km sehr locker oder frei",
+      "actual": "",
+      "reason": "",
+      "learning": ""
+    }
+  ]
+}

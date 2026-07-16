@@ -1,0 +1,24 @@
+[
+  {
+    "title": "🐒 Rundrücken / eingesackte Haltung",
+    "status": "🟡 offen",
+    "actions": [
+      "Band Pull Apart",
+      "Face Pull",
+      "Bird Dog",
+      "Brustwirbelsäulen-Mobility",
+      "lockeres Rudern"
+    ],
+    "review": "nach 2 Trainingswochen"
+  },
+  {
+    "title": "Verletzungsfreiheit sichern",
+    "status": "🟢 aktiv",
+    "actions": [
+      "Belastung nach jeder Einheit bewerten",
+      "Warnsignale früh ernst nehmen",
+      "Plan bei Bedarf dynamisch anpassen"
+    ],
+    "review": "laufend"
+  }
+]
