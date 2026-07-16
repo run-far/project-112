@@ -3,9 +3,11 @@ import MissionCard from "./components/MissionCard";
 import AthleteStatusCard from "./components/AthleteStatusCard";
 import NextWorkoutCard from "./components/NextWorkoutCard";
 
-import dashboard from "./data/dashboard";
+import { getDashboard } from "./services/dashboardService";
 
 function App() {
+  const dashboard = getDashboard();
+
   return (
     <main className="app-shell">
       <HeroCard mission={dashboard.mission} />
