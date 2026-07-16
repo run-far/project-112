@@ -6,7 +6,7 @@ const dashboard = {
   },
 
   mission: {
-    title: "Heartbeat Ultra Fulda",
+    title: "Heartbeat Ultra in Fulda",
     daysLeft: 128
   },
 

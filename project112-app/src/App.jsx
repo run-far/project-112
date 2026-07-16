@@ -1,15 +1,10 @@
+import HeroCard from "./components/HeroCard";
 import dashboard from "./data/dashboard";
 
 function App() {
   return (
     <main className="app-shell">
-      <header className="hero-card">
-        <p className="eyebrow">PROJECT 112</p>
-        <h1>Road to Fulda</h1>
-        <p className="subtitle">
-          Viel arbeiten. Gesund bleiben. {dashboard.mission.title} schaffen.
-        </p>
-      </header>
+      <HeroCard mission={dashboard.mission} />
 
       <section className="dashboard-grid">
         <article className="card">
@@ -22,8 +17,12 @@ function App() {
 
         <article className="card">
           <p className="label">Athletenstatus</p>
-          <strong className="status">{dashboard.athlete.status}</strong>
-          <p className="muted">{dashboard.athlete.statusText}</p>
+          <strong className="status">
+            {dashboard.athlete.status}
+          </strong>
+          <p className="muted">
+            {dashboard.athlete.statusText}
+          </p>
         </article>
 
         <article className="card wide">
