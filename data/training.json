@@ -3,60 +3,182 @@
     "hbu": "2026-11-21",
     "backyard": "2026-09-26"
   },
+  "athlete": {
+    "status": "🟢 Grün",
+    "note": "Belastung wird aktuell gut vertragen. Keine akuten Beschwerden gemeldet."
+  },
   "week": {
     "currentKm": 20.03,
-    "goalKm": 45
+    "goalKm": 45,
+    "footballKm": 0,
+    "bikeKm": 0,
+    "rowMinutes": 0,
+    "stabiDone": 0,
+    "stabiGoal": 0,
+    "score": "9.5"
   },
   "next": {
-    "title": "Easy Run 8–10 km",
-    "details": "Donnerstag · locker · kein Tempodruck"
+    "title": "🔵 Easy Run – 8–10 km",
+    "details": "Ganztag · locker · ohne Tempodruck"
   },
   "focus": {
-    "title": "Kilometer sammeln, Druck rausnehmen",
-    "text": "Die 20 km mit 510 Höhenmetern waren der Hauptreiz. Samstag folgen ORC-Intervalle, Sonntag Recovery."
+    "title": "Belastung verarbeiten und gesund bleiben",
+    "text": "Die Berg-Einheit war der Hauptreiz. Samstag sind ORC-Intervalle gesetzt. Stabi und Rudern werden ab nächster Woche gezielt ergänzt."
   },
   "events": [
     {
       "day": "Mo",
-      "title": "Bayernrunde",
-      "details": "20,03 km · 510 HM",
-      "done": true
+      "title": "🔑⛰️ Bayernrunde",
+      "time": "Ganztag",
+      "status": "✅ Erledigt",
+      "planned": "18,8 km · 440 HM",
+      "actual": "20,03 km · 510 HM",
+      "reason": "Strecke war etwas länger und höhenreicher als geplant.",
+      "learning": "Mit zusätzlichem Gel und mehr Wasser wären weitere 5 km möglich gewesen."
     },
     {
       "day": "Di",
       "title": "Ruhetag",
-      "details": "Regeneration",
-      "done": true
+      "time": "Ganztag",
+      "status": "✅ Erledigt",
+      "planned": "Regeneration",
+      "actual": "Regeneration",
+      "reason": "",
+      "learning": ""
     },
     {
       "day": "Mi",
-      "title": "ORC Run",
-      "details": "bereits im Kalender",
-      "done": true
+      "title": "📌🏃 ORC Run",
+      "time": "19:00 Uhr",
+      "status": "✅ Erledigt",
+      "planned": "ORC Gruppenlauf",
+      "actual": "Erledigt",
+      "reason": "",
+      "learning": ""
     },
     {
       "day": "Do",
-      "title": "Easy Run",
-      "details": "8–10 km",
-      "done": false
+      "title": "🔵 Easy Run",
+      "time": "Ganztag",
+      "status": "🗓 Geplant",
+      "planned": "8–10 km locker",
+      "actual": "",
+      "reason": "",
+      "learning": ""
     },
     {
       "day": "Fr",
-      "title": "Easy Run oder Rad",
-      "details": "6–8 km oder 60–75 Min Rad",
-      "done": false
+      "title": "🟢 Optional: Easy Run oder Rad",
+      "time": "Ganztag",
+      "status": "🟢 Optional",
+      "planned": "6–8 km easy oder 60–75 Min Rad",
+      "actual": "",
+      "reason": "",
+      "learning": ""
     },
     {
       "day": "Sa",
-      "title": "ORC Intervalle",
-      "details": "Qualitätseinheit",
-      "done": false
+      "title": "📌🔥 ORC Intervalle",
+      "time": "09:00 Uhr",
+      "status": "📌 Fix",
+      "planned": "ORC Intervalltraining",
+      "actual": "",
+      "reason": "",
+      "learning": ""
     },
     {
       "day": "So",
-      "title": "Recovery",
-      "details": "5–8 km oder frei",
-      "done": false
+      "title": "🟢 Optional: Recovery Run",
+      "time": "Ganztag",
+      "status": "🟢 Optional",
+      "planned": "5–8 km sehr locker oder frei",
+      "actual": "",
+      "reason": "",
+      "learning": ""
+    }
+  ],
+  "statsByType": [
+    {
+      "label": "🔵 Easy",
+      "km": 0
+    },
+    {
+      "label": "🔑 Longrun",
+      "km": 20.03
+    },
+    {
+      "label": "🔥 Intervalle",
+      "km": 0
+    },
+    {
+      "label": "📌 ORC",
+      "km": 0
+    },
+    {
+      "label": "⚽ Fußball",
+      "km": 0
+    }
+  ],
+  "fuel": [
+    {
+      "product": "PF&H Drink Mix",
+      "stock": "Bestand offen",
+      "tolerance": "Verträglichkeit bisher gut",
+      "note": "Menge und Portionsgröße ergänzen."
+    },
+    {
+      "product": "Maurten Gel 100",
+      "stock": "Bestand offen",
+      "tolerance": "Verträglichkeit bisher gut",
+      "note": "Bei Longruns mindestens ein Reserve-Gel einplanen."
+    },
+    {
+      "product": "Elektrolyt-Pulver",
+      "stock": "Bestand offen",
+      "tolerance": "Noch systematisch dokumentieren",
+      "note": "Produkt, Menge und Einsatzbereich ergänzen."
+    }
+  ],
+  "weaknesses": [
+    {
+      "title": "🐒 Rundrücken / eingesackte Haltung",
+      "status": "🟡 offen",
+      "actions": [
+        "Band Pull Apart",
+        "Face Pull",
+        "Bird Dog",
+        "Brustwirbelsäulen-Mobility",
+        "lockeres Rudern"
+      ],
+      "review": "nach 2 Trainingswochen"
+    },
+    {
+      "title": "Verletzungsfreiheit sichern",
+      "status": "🟢 aktiv",
+      "actions": [
+        "Belastung nach jeder Einheit bewerten",
+        "Warnsignale früh ernst nehmen",
+        "Plan bei Bedarf dynamisch anpassen"
+      ],
+      "review": "laufend"
+    }
+  ],
+  "missions": [
+    {
+      "title": "Mission: Bayernrunde",
+      "planned": "18,8 km mit 440 HM",
+      "actual": "20,03 km mit 510 HM in 2:13 h",
+      "status": "✅ Erfolgreich erweitert",
+      "reason": "Streckenverlauf war länger als erwartet; Körper blieb stabil.",
+      "learning": "Ausdauer war nicht limitierend. Für 25 km wären mehr Wasser und ein weiteres Gel nötig gewesen."
+    },
+    {
+      "title": "Beispiel: HBU Loop Session",
+      "planned": "6 × 6,02 km = 36,12 km",
+      "actual": "4 × 6,02 km = 24,08 km",
+      "status": "⬇️ Verkürzt",
+      "reason": "Beispieldatensatz: Versorgung oder Beschwerden würden hier konkret dokumentiert.",
+      "learning": "Nicht nur Kilometer zählen, sondern Abweichung und Ursache festhalten."
     }
   ]
 }

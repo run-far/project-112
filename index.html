@@ -1,12 +1,115 @@
 <!doctype html>
-<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Heartbeat Ultra Coach</title><link rel="stylesheet" href="css/style.css"></head>
-<body><main class="wrap">
-<header class="card hero"><div><small>HEARTBEAT ULTRA COACH</small><h1>112 km in Fulda</h1><p>Nicht schnell werden. Belastbar werden.</p></div><b>HBU 2026</b></header>
-<section class="grid"><article class="card"><small>Bis HBU</small><div class="num" id="hbu">–</div><p>Tage bis 21.11.2026</p></article>
-<article class="card"><small>Backyard Ultra</small><div class="num" id="backyard">–</div><p>Tage bis 26.09.2026</p></article></section>
-<section class="grid"><article class="card"><small>Wochenziel</small><h2><span id="current">0</span> / <span id="goal">0</span> km</h2><div class="bar"><i id="progress"></i></div></article>
-<article class="card"><small>Nächste Einheit</small><h2 id="next">–</h2><p id="nextDetails">–</p></article></section>
-<section class="card"><div class="top"><div><small>Diese Woche</small><h2>Trainingsplan</h2></div><a href="calendar/heartbeat-ultra.ics">Kalender abonnieren</a></div><div id="events"></div></section>
-<section class="card"><small>Fokus</small><h2 id="focus">–</h2><p id="focusText">–</p></section>
-</main><script src="js/app.js"></script></body></html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#08100c">
+  <title>Project 112</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<main class="wrap">
+  <header class="card hero">
+    <div>
+      <p class="eyebrow">PROJECT 112</p>
+      <h1>Road to Fulda</h1>
+      <p class="subtitle">Viel arbeiten. Gesund bleiben. 112 km schaffen.</p>
+    </div>
+    <div class="project-badge">112 KM</div>
+  </header>
+
+  <section class="grid three">
+    <article class="card countdown">
+      <p class="label">Heartbeat Ultra</p>
+      <div class="big" id="hbu-days">–</div>
+      <p class="muted">Tage bis 21.11.2026</p>
+    </article>
+    <article class="card countdown">
+      <p class="label">Backyard Ultra</p>
+      <div class="big" id="backyard-days">–</div>
+      <p class="muted">Tage bis 26.09.2026</p>
+    </article>
+    <article class="card">
+      <p class="label">Athletenstatus</p>
+      <div class="athlete-status" id="athlete-status">–</div>
+      <p class="muted" id="athlete-note">–</p>
+    </article>
+  </section>
+
+  <section class="grid two">
+    <article class="card">
+      <div class="row">
+        <div>
+          <p class="label">Wochenziel Laufen</p>
+          <h2><span id="week-current">0</span> / <span id="week-goal">0</span> km</h2>
+        </div>
+        <div class="score" id="training-score">–</div>
+      </div>
+      <div class="progress"><div id="week-progress"></div></div>
+      <p class="muted">Andere Sportarten werden separat geführt.</p>
+    </article>
+    <article class="card">
+      <p class="label">Nächste Einheit</p>
+      <h2 id="next-title">–</h2>
+      <p id="next-details">–</p>
+    </article>
+  </section>
+
+  <section class="card">
+    <div class="row">
+      <div>
+        <p class="label">Diese Woche</p>
+        <h2>Plan & aktueller Stand</h2>
+      </div>
+      <a class="button" href="calendar/heartbeat-ultra.ics">📅 Kalender abonnieren</a>
+    </div>
+    <div class="legend">
+      <span>🔑 Schlüssel</span><span>📌 Fix</span><span>🔵 Easy</span>
+      <span>🟢 Optional</span><span>⚽ Fußball</span><span>🚣 Rudern</span><span>💪 Stabi</span>
+    </div>
+    <div id="week-list" class="week-list"></div>
+  </section>
+
+  <section class="grid five">
+    <article class="card stat"><span>🏃 Laufen</span><strong id="run-km">0 km</strong></article>
+    <article class="card stat"><span>⚽ Fußball</span><strong id="football-km">0 km</strong></article>
+    <article class="card stat"><span>🚴 Rad</span><strong id="bike-km">0 km</strong></article>
+    <article class="card stat"><span>🚣 Rudern</span><strong id="row-min">0 Min</strong></article>
+    <article class="card stat"><span>💪 Stabi</span><strong id="stabi-count">0 / 0</strong></article>
+  </section>
+
+  <section class="card">
+    <p class="label">Kilometer nach Einheitentyp</p>
+    <div id="type-stats" class="type-stats"></div>
+  </section>
+
+  <section class="grid two">
+    <article class="card">
+      <p class="label">🧪 Fuel Lab</p>
+      <h2>Bestand & Verträglichkeit</h2>
+      <div id="fuel-list" class="stack"></div>
+    </article>
+    <article class="card">
+      <p class="label">💪 Performance Lab</p>
+      <h2>Weaknesses & Maßnahmen</h2>
+      <div id="weakness-list" class="stack"></div>
+    </article>
+  </section>
+
+  <section class="card">
+    <p class="label">📜 Mission Log</p>
+    <h2>Plan, Ist und Learning</h2>
+    <div id="mission-list" class="mission-list"></div>
+  </section>
+
+  <section class="card">
+    <p class="label">Fokus der Woche</p>
+    <h2 id="focus-title">–</h2>
+    <p id="focus-text">–</p>
+  </section>
+
+  <footer>Project 112 · Road to Fulda</footer>
+</main>
+<script src="js/app.js"></script>
+</body>
+</html>
