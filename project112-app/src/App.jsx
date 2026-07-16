@@ -1,4 +1,8 @@
 import HeroCard from "./components/HeroCard";
+import MissionCard from "./components/MissionCard";
+import AthleteStatusCard from "./components/AthleteStatusCard";
+import NextWorkoutCard from "./components/NextWorkoutCard";
+
 import dashboard from "./data/dashboard";
 
 function App() {
@@ -7,31 +11,11 @@ function App() {
       <HeroCard mission={dashboard.mission} />
 
       <section className="dashboard-grid">
-        <article className="card">
-          <p className="label">{dashboard.mission.title}</p>
-          <strong className="big-number">
-            {dashboard.mission.daysLeft}
-          </strong>
-          <p className="muted">Tage bis zum Start</p>
-        </article>
+        <MissionCard mission={dashboard.mission} />
 
-        <article className="card">
-          <p className="label">Athletenstatus</p>
-          <strong className="status">
-            {dashboard.athlete.status}
-          </strong>
-          <p className="muted">
-            {dashboard.athlete.statusText}
-          </p>
-        </article>
+        <AthleteStatusCard athlete={dashboard.athlete} />
 
-        <article className="card wide">
-          <p className="label">Nächste Einheit</p>
-          <h2>{dashboard.nextWorkout.title}</h2>
-          <p className="muted">
-            {dashboard.nextWorkout.description}
-          </p>
-        </article>
+        <NextWorkoutCard workout={dashboard.nextWorkout} />
       </section>
     </main>
   );
