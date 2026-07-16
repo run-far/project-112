@@ -1,0 +1,62 @@
+{
+  "races": {
+    "hbu": "2026-11-21",
+    "backyard": "2026-09-26"
+  },
+  "week": {
+    "currentKm": 20.03,
+    "goalKm": 45
+  },
+  "next": {
+    "title": "Easy Run 8–10 km",
+    "details": "Donnerstag · locker · kein Tempodruck"
+  },
+  "focus": {
+    "title": "Kilometer sammeln, Druck rausnehmen",
+    "text": "Die 20 km mit 510 Höhenmetern waren der Hauptreiz. Samstag folgen ORC-Intervalle, Sonntag Recovery."
+  },
+  "events": [
+    {
+      "day": "Mo",
+      "title": "Bayernrunde",
+      "details": "20,03 km · 510 HM",
+      "done": true
+    },
+    {
+      "day": "Di",
+      "title": "Ruhetag",
+      "details": "Regeneration",
+      "done": true
+    },
+    {
+      "day": "Mi",
+      "title": "ORC Run",
+      "details": "bereits im Kalender",
+      "done": true
+    },
+    {
+      "day": "Do",
+      "title": "Easy Run",
+      "details": "8–10 km",
+      "done": false
+    },
+    {
+      "day": "Fr",
+      "title": "Easy Run oder Rad",
+      "details": "6–8 km oder 60–75 Min Rad",
+      "done": false
+    },
+    {
+      "day": "Sa",
+      "title": "ORC Intervalle",
+      "details": "Qualitätseinheit",
+      "done": false
+    },
+    {
+      "day": "So",
+      "title": "Recovery",
+      "details": "5–8 km oder frei",
+      "done": false
+    }
+  ]
+}
