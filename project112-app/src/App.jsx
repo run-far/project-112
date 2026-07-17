@@ -4,6 +4,8 @@ import MilestoneCard from "./components/MilestoneCard";
 import AthleteStatusCard from "./components/AthleteStatusCard";
 import NextWorkoutCard from "./components/NextWorkoutCard";
 import MissionTimeline from "./components/MissionTimeline";
+import WeekPlan from "./components/WeekPlan";
+import WorkoutReview from "./components/WorkoutReview";
 import FuelInventory from "./components/FuelInventory";
 
 import { getDashboard } from "./services/dashboardService";
@@ -27,6 +29,10 @@ function App() {
         <NextWorkoutCard workout={dashboard.nextWorkout} />
 
         <MissionTimeline events={dashboard.events} />
+
+        <WeekPlan />
+
+        <WorkoutReview />
 
         <FuelInventory />
       </section>

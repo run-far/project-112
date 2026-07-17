@@ -1,0 +1,167 @@
+.workout-review {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.workout-review-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.workout-review-header h2 {
+  margin: 4px 0 0;
+}
+
+.workout-review-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.workout-review-summary strong {
+  font-size: 20px;
+}
+
+.workout-review-summary span {
+  font-size: 13px;
+  opacity: 0.65;
+}
+
+.workout-review-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.workout-review-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.workout-review-field label {
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.workout-review-field input,
+.workout-review-field select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font: inherit;
+}
+
+.workout-review-field input[type="range"] {
+  padding: 8px 0;
+}
+
+.workout-review-field select option {
+  color: #111111;
+}
+
+.workout-review-wide {
+  grid-column: span 3;
+}
+
+.workout-review-button {
+  grid-column: 1 / -1;
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #111111;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.workout-review-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.workout-review-entry {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.workout-review-entry-main {
+  flex: 1;
+}
+
+.workout-review-entry h3 {
+  margin: 5px 0;
+}
+
+.workout-review-entry p {
+  margin: 5px 0 0;
+  opacity: 0.75;
+}
+
+.workout-review-date {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.65;
+}
+
+.workout-review-status {
+  display: inline-block;
+  margin-top: 10px;
+}
+
+.workout-review-delete {
+  align-self: flex-start;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.workout-review-delete:hover {
+  opacity: 1;
+}
+
+.workout-review-empty {
+  margin: 0;
+  padding: 20px;
+  text-align: center;
+  opacity: 0.65;
+}
+
+@media (max-width: 800px) {
+  .workout-review-form {
+    grid-template-columns: 1fr;
+  }
+
+  .workout-review-wide {
+    grid-column: span 1;
+  }
+
+  .workout-review-header {
+    flex-direction: column;
+  }
+
+  .workout-review-summary {
+    align-items: flex-start;
+  }
+
+  .workout-review-entry {
+    flex-direction: column;
+  }
+}

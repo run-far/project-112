@@ -1,0 +1,188 @@
+.week-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.week-plan-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.week-plan-header h2 {
+  margin: 4px 0 0;
+}
+
+.week-plan-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.week-plan-summary strong {
+  font-size: 20px;
+}
+
+.week-plan-summary span {
+  font-size: 13px;
+  opacity: 0.65;
+}
+
+.week-plan-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.week-plan-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.week-plan-field label {
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.week-plan-field input,
+.week-plan-field select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font: inherit;
+}
+
+.week-plan-field select option {
+  color: #111111;
+}
+
+.week-plan-notes {
+  grid-column: span 3;
+}
+
+.week-plan-add-button {
+  align-self: end;
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #111111;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.week-plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.week-plan-workout {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.week-plan-workout.completed {
+  opacity: 0.55;
+}
+
+.week-plan-workout.completed h3 {
+  text-decoration: line-through;
+}
+
+.week-plan-check {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.week-plan-workout-info {
+  flex: 1;
+}
+
+.week-plan-workout-info h3 {
+  margin: 4px 0;
+}
+
+.week-plan-workout-info p {
+  margin: 4px 0 0;
+  opacity: 0.7;
+}
+
+.week-plan-day {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.65;
+}
+
+.week-plan-workout-notes {
+  font-style: italic;
+}
+
+.week-plan-delete {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.week-plan-delete:hover {
+  opacity: 1;
+}
+
+.week-plan-empty {
+  margin: 0;
+  padding: 20px;
+  text-align: center;
+  opacity: 0.65;
+}
+
+@media (max-width: 900px) {
+  .week-plan-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .week-plan-notes {
+    grid-column: span 1;
+  }
+}
+
+@media (max-width: 650px) {
+  .week-plan-header {
+    flex-direction: column;
+  }
+
+  .week-plan-summary {
+    align-items: flex-start;
+  }
+
+  .week-plan-form {
+    grid-template-columns: 1fr;
+  }
+
+  .week-plan-workout {
+    align-items: flex-start;
+  }
+}
