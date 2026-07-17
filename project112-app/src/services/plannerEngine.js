@@ -90,108 +90,51 @@ export function generateWeekPlan({ activities = [], mission, config, forecast = 
   const sundayWeather = weatherDecision(weatherForDate(forecast, dateForDay(weekStart, 6)), config);
 
   let plan = [
-    item(weekStart, 0, {
-      time: config.footballTime || "19:00",
-      title: "Fußball",
-      type: "Fußball",
-      distance: 0,
-      notes: "Fixe intensive Einheit. Zählt als Belastung, aber nicht als Laufkilometer.",
-      optional: false,
-      fixed: true,
-    }),
-    item(weekStart, 1, {
-      time: "18:00",
-      title: `${tuesdayKm} km locker`,
-      type: "Easy Run",
-      distance: tuesdayKm,
-      notes: "Locker laufen, keine Pace erzwingen.",
-      optional: false,
-    }),
-    item(weekStart, 2, {
-      time: config.orcTime || "19:00",
-      title: "ORC Run",
-      type: "ORC Run",
-      distance: wednesdayKm,
-      notes: "Fixer Gruppenlauf. Intensität an die Beine nach dem Fußball anpassen.",
-      optional: false,
-      fixed: true,
-    }),
-    item(weekStart, 3, {
-      time: "18:30",
-      title: config.thursdayAlternative === "Rudern" ? "Rudern locker" : "Stabi & Mobilität",
-      type: config.thursdayAlternative === "Rudern" ? "Rudern" : "Stabi",
-      distance: 0,
-      duration: config.thursdayAlternative === "Rudern" ? 40 : 25,
-      notes: config.thursdayAlternative === "Rudern" ? "Ruhige Grundlageneinheit ohne Laufbelastung." : "Rumpf, Rücken, Hüfte und Füße.",
-      optional: false,
-    }),
-    item(weekStart, 4, {
-      time: "18:00",
-      title: fridayWeather?.indoor ? `${fridayKm} km Laufband` : `${fridayKm} km Recovery`,
-      type: fridayWeather?.indoor ? "Laufband" : "Easy Run",
-      distance: fridayKm,
-      notes: fridayWeather?.indoor
-        ? `Wetteranpassung: ${fridayWeather.tooHot ? "zu warm" : fridayWeather.tooWindy ? "stürmisch" : "Gewitterrisiko"}. Locker auf dem Laufband.`
-        : "Sehr locker. Bei schweren Beinen kürzen oder auslassen.",
-      optional: true,
-      weatherAdjusted: Boolean(fridayWeather?.indoor),
-    }),
-    item(weekStart, 5, {
-      time: config.orcTrackTime || "09:00",
-      title: "ORC Track",
-      type: "ORC Track",
-      distance: saturdayKm,
-      notes: "Optional. Nur mitnehmen, wenn die Beine frisch sind; sonst Ruhetag.",
-      optional: true,
-      fixed: true,
-    }),
-    item(weekStart, 6, {
-      time: sundayWeather?.tooHot ? "07:00" : "09:00",
-      title: `${longRun} km Longrun`,
-      type: sundayWeather?.indoor ? "Laufband" : "Long Run",
-      distance: longRun,
-      notes: sundayWeather?.indoor
-        ? `Wetteranpassung: ${sundayWeather.tooHot ? "früh starten oder Laufband" : "bei Sturm/Gewitter auf das Laufband wechseln"}. Fuel und Trinken testen.`
-        : "Ruhig und kontrolliert. Fuel und Trinken für den Ultra testen.",
-      optional: false,
-      weatherAdjusted: Boolean(sundayWeather?.indoor),
-    }),
+    item(weekStart, 0, { time: config.footballTime || "19:00", title: "Fußball", type: "Fußball", distance: 0, notes: "Fixe intensive Einheit. Zählt als Belastung, aber nicht als Laufkilometer.", optional: false, fixed: true }),
+    item(weekStart, 1, { time: "18:00", title: `${tuesdayKm} km locker`, type: "Easy Run", distance: tuesdayKm, notes: "Locker laufen, keine Pace erzwingen.", optional: false }),
+    item(weekStart, 2, { time: config.orcTime || "19:00", title: "ORC Run", type: "ORC Run", distance: wednesdayKm, notes: "Fixer Gruppenlauf. Intensität an die Beine nach dem Fußball anpassen.", optional: false, fixed: true }),
+    item(weekStart, 4, { time: "18:00", title: fridayWeather?.indoor ? `${fridayKm} km Laufband` : `${fridayKm} km Recovery`, type: fridayWeather?.indoor ? "Laufband" : "Easy Run", distance: fridayKm, notes: fridayWeather?.indoor ? `Wetteranpassung: ${fridayWeather.tooHot ? "zu warm" : fridayWeather.tooWindy ? "stürmisch" : "Gewitterrisiko"}. Locker auf dem Laufband.` : "Sehr locker. Bei schweren Beinen kürzen oder auslassen.", optional: true, weatherAdjusted: Boolean(fridayWeather?.indoor) }),
+    item(weekStart, 5, { time: config.orcTrackTime || "09:00", title: "ORC Track", type: "ORC Track", distance: saturdayKm, notes: "Optional. Nur mitnehmen, wenn die Beine frisch sind; sonst Ruhetag.", optional: true, fixed: true }),
+    item(weekStart, 6, { time: sundayWeather?.tooHot ? "07:00" : "09:00", title: `${longRun} km Longrun`, type: sundayWeather?.indoor ? "Laufband" : "Long Run", distance: longRun, notes: sundayWeather?.indoor ? `Wetteranpassung: ${sundayWeather.tooHot ? "früh starten oder Laufband" : "bei Sturm/Gewitter auf das Laufband wechseln"}. Fuel und Trinken testen.` : "Ruhig und kontrolliert. Fuel und Trinken für den Ultra testen.", optional: false, weatherAdjusted: Boolean(sundayWeather?.indoor) }),
   ];
 
+  const dayIndex = { Montag: 0, Dienstag: 1, Mittwoch: 2, Donnerstag: 3, Freitag: 4, Samstag: 5, Sonntag: 6 };
+  const stabiDays = (config.stabiDays?.length ? config.stabiDays : ["Donnerstag", "Sonntag"]).slice(0, Number(config.stabiCount ?? 2));
+  const rowingDays = (config.rowingDays?.length ? config.rowingDays : ["Donnerstag"]).slice(0, Number(config.rowingCount ?? 1));
+  const extraRunDays = (config.extraRunDays || []).slice(0, Number(config.extraRunCount || 0));
+  const doubleDays = new Set(config.doubleTrainingDays || []);
+
+  stabiDays.forEach((day, index) => {
+    if (dayIndex[day] === undefined) return;
+    plan.push(item(weekStart, dayIndex[day], { time: doubleDays.has(day) ? "07:00" : "18:30", title: "Stabi & Mobilität", type: "Stabi", distance: 0, duration: Number(config.stabiDuration || 25), notes: "Fester Bestandteil: Rumpf, Rücken, Hüfte und Füße.", optional: false, doubleSession: doubleDays.has(day), sequence: index + 1 }));
+  });
+  rowingDays.forEach((day, index) => {
+    if (dayIndex[day] === undefined) return;
+    plan.push(item(weekStart, dayIndex[day], { time: doubleDays.has(day) ? "07:00" : "18:30", title: "Rudern locker", type: "Rudern", distance: 0, duration: Number(config.rowingDuration || 40), notes: "Fester Bestandteil: ruhige Grundlageneinheit ohne zusätzliche Laufbelastung.", optional: false, doubleSession: doubleDays.has(day), sequence: index + 1 }));
+  });
+  extraRunDays.forEach((day) => {
+    if (dayIndex[day] === undefined) return;
+    const km = Number(config.extraRunDistance || 6);
+    plan.push(item(weekStart, dayIndex[day], { time: doubleDays.has(day) ? "07:00" : "18:00", title: `${km} km Zusatzlauf`, type: "Easy Run", distance: km, duration: Math.round(km * 6.5), notes: "Zusätzlicher Umfang. Locker laufen und bei Müdigkeit zuerst diese Einheit streichen.", optional: true, doubleSession: true }));
+  });
+
   const todayKey = isoDate(today);
-  const isCurrentWeek = offsetWeeks === 0;
-
-  if (isCurrentWeek) {
-    // Vergangene Tage werden nicht neu verplant. Die real importierten Aktivitäten
-    // werden im Planner separat angezeigt und bestimmen das verbleibende Wochenziel.
+  if (offsetWeeks === 0) {
     plan = plan.filter((entry) => entry.date >= todayKey);
-
     const remainingTarget = Math.max(0, target - Number(completedRunningKm || 0));
     const runEntries = plan.filter((entry) => Number(entry.distance || 0) > 0 && entry.type !== "Fußball");
     const generatedRunKm = runEntries.reduce((sum, entry) => sum + Number(entry.distance || 0), 0);
-
     if (generatedRunKm > 0 && remainingTarget < generatedRunKm) {
       const factor = remainingTarget / generatedRunKm;
       plan = plan.map((entry) => {
         if (!runEntries.some((runEntry) => runEntry.id === entry.id)) return entry;
         const adjusted = Math.max(entry.optional ? 0 : 3, Math.round(Number(entry.distance || 0) * factor));
-        return {
-          ...entry,
-          distance: adjusted,
-          title: entry.title.replace(/^\d+(?:[.,]\d+)?\s*km/, `${adjusted} km`),
-          notes: `${entry.notes} Bereits absolvierte Laufkilometer dieser Woche wurden berücksichtigt.`,
-        };
-      }).filter((entry) => Number(entry.distance || 0) > 0 || entry.type === "Fußball" || entry.type === "Stabi" || entry.type === "Rudern");
+        return { ...entry, distance: adjusted, title: entry.title.replace(/^\d+(?:[.,]\d+)?\s*km/, `${adjusted} km`), notes: `${entry.notes} Bereits absolvierte Laufkilometer dieser Woche wurden berücksichtigt.` };
+      }).filter((entry) => Number(entry.distance || 0) > 0 || ["Fußball", "Stabi", "Rudern"].includes(entry.type));
     }
   }
 
-  return {
-    plan,
-    target,
-    remainingTarget: Math.max(0, target - Number(completedRunningKm || 0)),
-    recentAverage: Math.round(recentAverage),
-    weekStart: isoDate(weekStart),
-  };
+  return { plan, target, remainingTarget: Math.max(0, target - Number(completedRunningKm || 0)), recentAverage: Math.round(recentAverage), weekStart: isoDate(weekStart) };
 }
 
 export async function fetchWeeklyForecast(latitude, longitude, weekStart) {
