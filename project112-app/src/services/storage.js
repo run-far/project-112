@@ -26,6 +26,7 @@ function sanitizeState(state, defaults) {
     garmin: { ...defaults.garmin, ...(state?.garmin || {}) },
     mission: { ...defaults.mission, ...(state?.mission || {}) },
     calendar: { ...defaults.calendar, ...(state?.calendar || {}) },
+    planner: { ...defaults.planner, ...(state?.planner || {}) },
   };
 }
 

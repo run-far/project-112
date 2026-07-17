@@ -19,7 +19,13 @@ function startOfCurrentWeek() {
   return monday;
 }
 
-function dateForWeekday(dayName, time = "18:00") {
+function dateForWeekday(dayName, time = "18:00", exactDate = null) {
+  if (exactDate) {
+    const selected = new Date(`${exactDate}T00:00:00`);
+    const [hours, minutes] = String(time || "18:00").split(":").map(Number);
+    selected.setHours(hours || 0, minutes || 0, 0, 0);
+    return selected;
+  }
   const names = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
   const target = names.indexOf(dayName);
   const monday = startOfCurrentWeek();
@@ -37,7 +43,7 @@ function formatIcsDate(date) {
 export function buildCalendar(plan) {
   const stamp = formatIcsDate(new Date());
   const events = (Array.isArray(plan) ? plan : []).map((item) => {
-    const start = dateForWeekday(item.day, item.time);
+    const start = dateForWeekday(item.day, item.time, item.date);
     const end = new Date(start.getTime() + Math.max(30, Number(item.duration || 60)) * 60_000);
     const description = [
       item.type,

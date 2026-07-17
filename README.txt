@@ -1,8 +1,22 @@
-StrideHQ – Fix für weiße Seite / fehlenden downloadCalendar-Export
+StrideHQ Wochenplaner Patch
 
-Die Datei project112-app/src/services/calendar.js über die bestehende Datei kopieren.
-Danach den laufenden Vite-Prozess beenden und neu starten:
+Enthalten:
+- neue Seite "Wochenplan"
+- intelligente Wochengenerierung
+- Montag Fußball fix
+- Mittwoch ORC Run fix
+- Samstag ORC Track optional
+- Stabi oder Rudern am Donnerstag
+- Wetteranpassung über Open-Meteo
+- Laufband bei Hitze, starken Böen oder Gewitter
+- Einheiten bearbeiten, archivieren, löschen und abhaken
+- aktuelle und kommende Wochen
+- ICS-Export mit echten Datumswerten
 
-npm run dev
+Installation:
+1. ZIP im Repository-Stamm entpacken.
+2. Vorhandene Dateien ersetzen.
+3. Im Ordner project112-app ausführen:
+   npm run dev
 
-Der Fix ergänzt den von Settings.jsx verwendeten Export downloadCalendar.
+Es werden keine neuen npm-Pakete benötigt.
