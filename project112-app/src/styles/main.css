@@ -39,3 +39,5 @@
   grid-column: 1 / -1;
   margin: .25rem 0 0;
 }
+
+.sport-breakdown{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px;padding-top:18px;border-top:1px solid #20362a}.sport-breakdown-item{display:flex;align-items:center;gap:9px;background:#14241a;border:1px solid #294033;border-radius:999px;padding:8px 12px}.sport-breakdown-item span{color:#9eb2a6;font-size:13px}.sport-breakdown-item strong{color:#eff8f2;font-size:15px}
