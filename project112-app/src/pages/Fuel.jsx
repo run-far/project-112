@@ -47,6 +47,11 @@ export default function Fuel() {
     }));
   }
 
+  function remove(id) {
+    if (!window.confirm("Dieses Fuel-Produkt endgültig löschen?")) return;
+    setState((current) => ({ ...current, fuel: current.fuel.filter((item) => item.id !== id) }));
+  }
+
   function archive(id) {
     setState((current) => ({
       ...current,
@@ -80,9 +85,9 @@ export default function Fuel() {
         <p className="eyebrow">{item.category}</p><h2>{item.brand ? `${item.brand} ${item.name}` : item.name}</h2>
         <div className="fuel-stats"><b>{item.carbs} g Carbs</b><span>{item.caffeine} mg Koffein</span></div>
         <div className="qty"><button onClick={() => qty(item.id, -1)}>−</button><strong>{item.quantity}</strong><button onClick={() => qty(item.id, 1)}>+</button></div>
-        <button onClick={() => archive(item.id)}>Archivieren</button>
+        <div className="event-actions"><button onClick={() => archive(item.id)}>Archivieren</button><button className="danger-button" onClick={() => remove(item.id)}>Löschen</button></div>
       </Card>)}
-      {archived.length > 0 && <Card className="wide"><p className="eyebrow">Archiv</p>{archived.map((item) => <div className="list-row" key={item.id}><span>{item.brand ? `${item.brand} ${item.name}` : item.name} · {item.category}</span><button onClick={() => archive(item.id)}>Reaktivieren</button></div>)}</Card>}
+      {archived.length > 0 && <Card className="wide"><p className="eyebrow">Archiv</p>{archived.map((item) => <div className="list-row" key={item.id}><span>{item.brand ? `${item.brand} ${item.name}` : item.name} · {item.category}</span><div className="event-actions"><button onClick={() => archive(item.id)}>Reaktivieren</button><button className="danger-button" onClick={() => remove(item.id)}>Löschen</button></div></div>)}</Card>}
     </div>
   </>;
 }
