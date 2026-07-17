@@ -44,11 +44,17 @@ export default function Equipment() {
   return (
     <>
       <PageTitle eyebrow="Equipment Intelligence" title="Ausrüstung">
-        <div className="page-actions">
-          <select value={category} onChange={(event) => setCategory(event.target.value)}>
-            {categories.map((item) => <option key={item}>{item}</option>)}
-          </select>
-          <button onClick={add}>+ Hinzufügen</button>
+        <div className="page-actions equipment-actions">
+          <label className="equipment-select">
+            <span className="sr-only">Ausrüstungskategorie</span>
+            <select value={category} onChange={(event) => setCategory(event.target.value)}>
+              {categories.map((item) => <option key={item}>{item}</option>)}
+            </select>
+          </label>
+          <button className="equipment-add-button" onClick={add}>
+            <span aria-hidden="true">＋</span>
+            Hinzufügen
+          </button>
         </div>
       </PageTitle>
 
