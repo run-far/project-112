@@ -3,13 +3,11 @@ import express from "express";
 import cors from "cors";
 
 const app = express();
-
 const port = Number(process.env.PORT || 3001);
-const allowedOrigins = (
-  process.env.FRONTEND_ORIGIN || "http://localhost:5173"
-)
+const allowedOrigins = (process.env.FRONTEND_ORIGIN || "http://localhost:5173")
   .split(",")
-  .map((origin) => origin.trim());
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 app.use(
   cors({
@@ -23,11 +21,10 @@ app.use(
     },
   }),
 );
-
 app.use(express.json());
 
-app.get("/health", (_, res) => {
-  res.json({
+app.get("/health", (_, response) => {
+  response.json({
     ok: true,
     service: "stridehq-server",
     stravaClientConfigured: Boolean(process.env.STRAVA_CLIENT_ID),
@@ -35,116 +32,106 @@ app.get("/health", (_, res) => {
   });
 });
 
-app.post("/api/strava/exchange", async (req, res) => {
+app.post("/api/strava/exchange", async (request, response) => {
   try {
-    const { code } = req.body;
+    const code = request.body?.code;
 
     if (!code) {
-      return res.status(400).json({
-        error: "code_missing",
-        message: "Der Strava-Autorisierungscode fehlt.",
-      });
+      return response.status(400).json({ message: "Der Strava-Code fehlt." });
     }
 
     if (!process.env.STRAVA_CLIENT_ID || !process.env.STRAVA_CLIENT_SECRET) {
-      return res.status(500).json({
-        error: "strava_credentials_missing",
-        message:
-          "STRAVA_CLIENT_ID oder STRAVA_CLIENT_SECRET fehlt in stridehq-server/.env.",
+      return response.status(500).json({
+        message: "STRAVA_CLIENT_ID oder STRAVA_CLIENT_SECRET fehlt in der Server-.env.",
       });
     }
 
     const body = new URLSearchParams({
       client_id: process.env.STRAVA_CLIENT_ID.trim(),
       client_secret: process.env.STRAVA_CLIENT_SECRET.trim(),
-      code: code.trim(),
+      code: String(code).trim(),
       grant_type: "authorization_code",
     });
 
-    const response = await fetch("https://www.strava.com/oauth/token", {
+    const stravaResponse = await fetch("https://www.strava.com/oauth/token", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
         Accept: "application/json",
       },
       body,
+      signal: AbortSignal.timeout(20_000),
     });
 
-    const responseText = await response.text();
+    const data = await stravaResponse.json();
 
-    let data;
-
-    try {
-      data = JSON.parse(responseText);
-    } catch {
-      data = {
-        error: "invalid_strava_response",
-        message: responseText,
-      };
-    }
-
-    if (!response.ok) {
+    if (!stravaResponse.ok) {
       console.error("Strava token exchange failed:", {
-        status: response.status,
+        status: stravaResponse.status,
         response: data,
       });
 
-      return res.status(response.status).json({
-        error: "strava_token_exchange_failed",
-        stravaStatus: response.status,
+      return response.status(stravaResponse.status).json({
+        message: "Strava hat den Token-Austausch abgelehnt.",
         stravaResponse: data,
       });
     }
 
-    return res.json(data);
+    return response.json(data);
   } catch (error) {
     console.error("Token exchange error:", error);
-
-    return res.status(500).json({
-      error: "token_exchange_internal_error",
+    return response.status(500).json({
       message: error instanceof Error ? error.message : String(error),
     });
   }
 });
 
-app.get("/api/strava/activities", async (req, res) => {
+app.get("/api/strava/activities", async (request, response) => {
   try {
-    const token = req.headers.authorization?.replace(/^Bearer\s+/i, "").trim();
+    const accessToken = request.headers.authorization
+      ?.replace(/^Bearer\s+/i, "")
+      .trim();
 
-    if (!token) {
-      return res.status(401).json({
-        error: "token_missing",
-        message: "Access Token fehlt.",
-      });
+    if (!accessToken) {
+      return response.status(401).json({ message: "Access Token fehlt." });
     }
 
-    const response = await fetch(
-      "https://www.strava.com/api/v3/athlete/activities?per_page=100&page=1",
+    const page = Math.max(1, Number(request.query.page || 1));
+    const perPage = Math.min(100, Math.max(1, Number(request.query.perPage || 100)));
+    const params = new URLSearchParams({
+      page: String(page),
+      per_page: String(perPage),
+    });
+
+    const stravaResponse = await fetch(
+      `https://www.strava.com/api/v3/athlete/activities?${params}`,
       {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${accessToken}`,
           Accept: "application/json",
         },
+        signal: AbortSignal.timeout(20_000),
       },
     );
 
-    const data = await response.json();
+    const data = await stravaResponse.json();
 
-    if (!response.ok) {
+    if (!stravaResponse.ok) {
       console.error("Strava activities failed:", {
-        status: response.status,
+        status: stravaResponse.status,
         response: data,
       });
 
-      return res.status(response.status).json(data);
+      return response.status(stravaResponse.status).json({
+        message: data?.message || "Strava-Aktivitäten konnten nicht geladen werden.",
+        details: data,
+      });
     }
 
-    return res.json(data);
+    return response.json(data);
   } catch (error) {
     console.error("Activities error:", error);
-
-    return res.status(500).json({
-      error: "activities_internal_error",
+    return response.status(500).json({
       message: error instanceof Error ? error.message : String(error),
     });
   }
@@ -152,12 +139,6 @@ app.get("/api/strava/activities", async (req, res) => {
 
 app.listen(port, () => {
   console.log(`StrideHQ server on ${port}`);
-  console.log(
-    `Strava Client-ID configured: ${Boolean(process.env.STRAVA_CLIENT_ID)}`,
-  );
-  console.log(
-    `Strava Client-Secret configured: ${Boolean(
-      process.env.STRAVA_CLIENT_SECRET,
-    )}`,
-  );
+  console.log(`Strava Client-ID configured: ${Boolean(process.env.STRAVA_CLIENT_ID)}`);
+  console.log(`Strava Client-Secret configured: ${Boolean(process.env.STRAVA_CLIENT_SECRET)}`);
 });
