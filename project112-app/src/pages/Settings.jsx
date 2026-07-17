@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../context/AppContext";
 import { Card, PageTitle } from "../components/UI";
 import { connectStrava, exchangeCode, fetchActivities, mapRunningActivities } from "../services/strava";
-import { downloadCalendar, publicCalendarUrl, syncCalendar } from "../services/calendar";
+import { downloadCalendar, publicCalendarUrl } from "../services/calendar";
 import { resetState } from "../services/storage";
 import { mergeGarminActivities, readGarminExport } from "../services/garminImport";
+import { calendarSubscriptionUrl } from "../services/supabase";
 
 export default function Settings() {
-  const { state, setState } = useApp();
+  const { state, setState, session, cloudStatus, cloudUpdatedAt, calendarToken, uploadLocalState, reloadCloudState, logout } = useApp();
   const [message, setMessage] = useState("");
   const [calendarMessage, setCalendarMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -96,21 +97,24 @@ export default function Settings() {
     setGarminPreview(null);
   }
 
-  async function publishCalendar() {
-    setCalendarMessage("Kalender wird aktualisiert …");
-    try {
-      const result = await syncCalendar(state.calendar.id, state.plan);
-      setState((current) => ({ ...current, calendar: { ...current.calendar, lastSyncAt: result.updatedAt } }));
-      setCalendarMessage(result.mode === "download" ? `${result.count} Termine als stridehq.ics erstellt. Datei anschließend unter calendar/stridehq.ics ersetzen und zu GitHub pushen.` : `${result.count} Termine veröffentlicht.`);
-    } catch (error) { setCalendarMessage(error instanceof Error ? error.message : String(error)); }
-  }
-
   const athleteName = [state.strava.athlete?.firstname, state.strava.athlete?.lastname].filter(Boolean).join(" ");
-  const calendarUrl = publicCalendarUrl;
+  const calendarUrl = calendarToken ? calendarSubscriptionUrl(calendarToken) : publicCalendarUrl;
+  const cloudStatusLabel = { local: "Nur lokal", loading: "Cloud wird geladen …", saving: "Wird gespeichert …", synced: "Synchronisiert", error: "Synchronisierung fehlgeschlagen" }[cloudStatus] || cloudStatus;
 
   return <>
     <PageTitle eyebrow="Settings" title="Verbindungen & Daten" />
     <div className="grid">
+      <Card className="wide">
+        <p className="eyebrow">StrideHQ Cloud</p><h2>Geräteübergreifend synchronisiert</h2>
+        <p className="muted">Angemeldet als <b>{session?.user?.email}</b>. Änderungen werden automatisch in Supabase gespeichert und auf anderen Geräten geladen.</p>
+        <span className={`cloud-status ${cloudStatus}`}>{cloudStatusLabel}</span>
+        {cloudUpdatedAt && <p className="muted">Letzte Cloud-Aktualisierung: {new Date(cloudUpdatedAt).toLocaleString("de-DE")}</p>}
+        <div className="button-row">
+          <button onClick={uploadLocalState}>Lokale Daten in Cloud übernehmen</button>
+          <button className="secondary" onClick={reloadCloudState}>Cloud neu laden</button>
+          <button className="secondary" onClick={logout}>Abmelden</button>
+        </div>
+      </Card>
       <Card>
         <p className="eyebrow">Strava</p><h2>{state.strava.connected ? "Verbunden" : "Nicht verbunden"}</h2>
         <p className="muted">{state.strava.connected ? `${athleteName ? `Verbunden mit ${athleteName}. ` : ""}Deine Laufaktivitäten können synchronisiert werden.` : "Verbinde Strava, damit deine Laufaktivitäten automatisch in StrideHQ erscheinen."}</p>
@@ -150,12 +154,12 @@ export default function Settings() {
 
       <Card>
         <p className="eyebrow">Apple Kalender</p><h2>Kalender-Abo</h2>
-        <p className="muted">Veröffentlicht die aktuelle Trainingswoche als abonnierbaren ICS-Kalender.</p>
+        <p className="muted">Die Cloud-Adresse liefert deinen aktuellen Wochenplan automatisch als Kalenderabo. Nach Änderungen muss keine Datei mehr manuell hochgeladen werden.</p>
         <div className="button-row">
-          <button onClick={publishCalendar}>ICS erzeugen</button>
-          <button className="secondary" onClick={() => downloadCalendar(state.plan)}>Erneut herunterladen</button>
+          <button onClick={() => navigator.clipboard?.writeText(calendarUrl).then(() => setCalendarMessage("Kalenderadresse kopiert."))} disabled={!calendarToken}>Abo-Adresse kopieren</button>
+          <button className="secondary" onClick={() => downloadCalendar(state.plan)}>ICS als Datei</button>
         </div>
-        {calendarUrl && <><label className="calendar-url-label">Abo-Adresse<input readOnly value={calendarUrl} onFocus={(event) => event.target.select()} /></label><p className="muted">Die heruntergeladene Datei als <b>calendar/stridehq.ics</b> in das Repository kopieren, committen und pushen. Das iPhone-Kalenderabo aktualisiert danach automatisch dieselbe Adresse.</p><p className="muted">Auf dem iPhone: Kalender → Kalender hinzufügen → Kalenderabonnement hinzufügen → Adresse einsetzen.</p></>}
+        {calendarUrl && <><label className="calendar-url-label">Abo-Adresse<input readOnly value={calendarUrl} onFocus={(event) => event.target.select()} /></label><p className="muted">Sobald die Supabase-Funktion <b>calendar</b> veröffentlicht wurde, aktualisiert sich dieses Abo automatisch aus deinen Cloud-Daten.</p><p className="muted">Auf dem iPhone: Kalender → Kalender hinzufügen → Kalenderabonnement hinzufügen → Adresse einsetzen.</p></>}
         {calendarMessage && <p className="connection-message">{calendarMessage}</p>}
       </Card>
 
