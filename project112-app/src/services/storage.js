@@ -24,6 +24,7 @@ function sanitizeState(state, defaults) {
     reviews: state?.reviews && typeof state.reviews === "object" ? state.reviews : {},
     strava: { ...defaults.strava, ...(state?.strava || {}) },
     mission: { ...defaults.mission, ...(state?.mission || {}) },
+    calendar: { ...defaults.calendar, ...(state?.calendar || {}) },
   };
 }
 

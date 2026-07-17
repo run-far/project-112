@@ -2,12 +2,23 @@ export const mission = {
   id: "hbu-2026",
   name: "Heartbeat Ultra Fulda",
   date: "2026-11-21",
+  location: "Fulda, Deutschland",
   targetKm: 112,
   weeklyTarget: 70,
   milestone: {
+    id: "backyard-2026",
     name: "Backyard Ultra",
     date: "2026-09-26",
+    location: "",
   },
+  milestones: [
+    {
+      id: "backyard-2026",
+      name: "Backyard Ultra",
+      date: "2026-09-26",
+      location: "",
+    },
+  ],
 };
 
 export const defaultState = {
@@ -17,6 +28,10 @@ export const defaultState = {
   equipment: [],
   fuel: [],
   mission,
+  calendar: {
+    id: crypto.randomUUID(),
+    lastSyncAt: null,
+  },
   strava: {
     connected: false,
     athlete: null,
