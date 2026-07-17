@@ -1,0 +1,169 @@
+.fuel-inventory {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.fuel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.fuel-header h2 {
+  margin: 4px 0 0;
+}
+
+.fuel-count {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.fuel-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.fuel-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fuel-field label {
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.fuel-field input,
+.fuel-field select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font: inherit;
+}
+
+.fuel-field input[type="range"] {
+  padding: 8px 0;
+  cursor: pointer;
+}
+
+.fuel-field select option {
+  color: #111111;
+}
+
+.fuel-add-button {
+  grid-column: 1 / -1;
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #111111;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.fuel-product-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fuel-product,
+.fuel-test {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.fuel-product-info h3 {
+  margin: 5px 0;
+}
+
+.fuel-product-info p {
+  margin: 4px 0 0;
+  opacity: 0.7;
+}
+
+.fuel-category {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.65;
+}
+
+.fuel-product-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.fuel-quantity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.fuel-quantity button {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.fuel-delete-button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.fuel-delete-button:hover {
+  opacity: 1;
+}
+
+.fuel-test-note {
+  font-style: italic;
+}
+
+.fuel-empty {
+  margin: 0;
+  padding: 20px;
+  text-align: center;
+  opacity: 0.65;
+}
+
+@media (max-width: 800px) {
+  .fuel-form {
+    grid-template-columns: 1fr;
+  }
+
+  .fuel-product,
+  .fuel-test {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .fuel-product-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
