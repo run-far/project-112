@@ -1,25 +1,14 @@
-StrideHQ Sprint 1 Patch
+StrideHQ OpenStreetMap-Ortssuche
 
-1. Inhalt dieses ZIPs in das Stammverzeichnis von project-112 kopieren.
+1. ZIP im Hauptordner von project-112 entpacken.
 2. Vorhandene Dateien ersetzen.
-3. Backend neu starten:
-   cd stridehq-server
-   npm start
-4. Frontend neu starten:
-   cd project112-app
-   npm run dev
-5. Unter Settings Strava neu verbinden oder unter Training synchronisieren.
+3. Frontend neu starten: cd project112-app && npm run dev
 
-Enthalten:
-- Keine Demo-Aktivitäten, Demo-Ausrüstung oder Demo-Fuel-Daten mehr
-- automatische Migration von stridehq.v1 auf stridehq.v2
-- kompletter Strava-Import ab 01.01.2025 mit Pagination
-- echte Wochenkilometer und wirklich letzter Lauf
-- Jahresvergleich 2025/2026
-- Equipment für Schuhe, Laufband, Rudergerät und weitere Kategorien
-- Week Planner mit Uhrzeit sowie Pflicht/Optional
+Neu:
+- Ortsvorschläge beim Tippen ab 3 Zeichen
+- Auswahl über OpenStreetMap/Nominatim
+- Speicherung von Anzeigename, Breiten- und Längengrad
+- Wetter nutzt anschließend direkt die gespeicherten Koordinaten
+- Manuelle Ortsangaben bleiben weiterhin möglich
 
-Geprüft:
-- Frontend npm run build erfolgreich
-- Frontend npm run lint erfolgreich
-- Backend node --check erfolgreich
+Hinweis: Die öffentliche Nominatim-Suche ist für die lokale/private Nutzung gedacht und wird durch eine Verzögerung gedrosselt.
