@@ -73,7 +73,7 @@ function item(weekStart, dayIndex, values) {
   };
 }
 
-export function generateWeekPlan({ activities = [], mission, config, forecast = [], offsetWeeks = 0 }) {
+export function generateWeekPlan({ activities = [], mission, config, forecast = [], offsetWeeks = 0, completedRunningKm = 0, today = new Date() }) {
   const weekStart = startOfWeek(new Date(), offsetWeeks);
   const recentAverage = recentRunningKilometers(activities, weekStart);
   const configuredTarget = Number(config.weeklyTarget || mission?.weeklyTarget || 60);
@@ -89,7 +89,7 @@ export function generateWeekPlan({ activities = [], mission, config, forecast = 
   const fridayWeather = weatherDecision(weatherForDate(forecast, dateForDay(weekStart, 4)), config);
   const sundayWeather = weatherDecision(weatherForDate(forecast, dateForDay(weekStart, 6)), config);
 
-  const plan = [
+  let plan = [
     item(weekStart, 0, {
       time: config.footballTime || "19:00",
       title: "Fußball",
@@ -158,7 +158,40 @@ export function generateWeekPlan({ activities = [], mission, config, forecast = 
     }),
   ];
 
-  return { plan, target, recentAverage: Math.round(recentAverage), weekStart: isoDate(weekStart) };
+  const todayKey = isoDate(today);
+  const isCurrentWeek = offsetWeeks === 0;
+
+  if (isCurrentWeek) {
+    // Vergangene Tage werden nicht neu verplant. Die real importierten Aktivitäten
+    // werden im Planner separat angezeigt und bestimmen das verbleibende Wochenziel.
+    plan = plan.filter((entry) => entry.date >= todayKey);
+
+    const remainingTarget = Math.max(0, target - Number(completedRunningKm || 0));
+    const runEntries = plan.filter((entry) => Number(entry.distance || 0) > 0 && entry.type !== "Fußball");
+    const generatedRunKm = runEntries.reduce((sum, entry) => sum + Number(entry.distance || 0), 0);
+
+    if (generatedRunKm > 0 && remainingTarget < generatedRunKm) {
+      const factor = remainingTarget / generatedRunKm;
+      plan = plan.map((entry) => {
+        if (!runEntries.some((runEntry) => runEntry.id === entry.id)) return entry;
+        const adjusted = Math.max(entry.optional ? 0 : 3, Math.round(Number(entry.distance || 0) * factor));
+        return {
+          ...entry,
+          distance: adjusted,
+          title: entry.title.replace(/^\d+(?:[.,]\d+)?\s*km/, `${adjusted} km`),
+          notes: `${entry.notes} Bereits absolvierte Laufkilometer dieser Woche wurden berücksichtigt.`,
+        };
+      }).filter((entry) => Number(entry.distance || 0) > 0 || entry.type === "Fußball" || entry.type === "Stabi" || entry.type === "Rudern");
+    }
+  }
+
+  return {
+    plan,
+    target,
+    remainingTarget: Math.max(0, target - Number(completedRunningKm || 0)),
+    recentAverage: Math.round(recentAverage),
+    weekStart: isoDate(weekStart),
+  };
 }
 
 export async function fetchWeeklyForecast(latitude, longitude, weekStart) {

@@ -13,6 +13,23 @@ function createBlank(weekStart) {
   return { id: crypto.randomUUID(), date: isoDate(date), day: "Dienstag", time: "18:00", title: "", type: "Easy Run", distance: 0, duration: 60, notes: "", optional: false, completed: false, source: "planner", archived: false };
 }
 
+function activityDate(activity) {
+  return String(activity.startDateLocal || activity.date || "").slice(0, 10);
+}
+
+function activityTime(activity) {
+  const raw = activity.startDateLocal || activity.date;
+  if (!raw || !String(raw).includes("T")) return "";
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+function isRunningActivity(activity) {
+  const type = String(activity.type || activity.sportType || "").toLowerCase();
+  return type.includes("run") || type.includes("lauf") || type === "running" || type.includes("treadmill");
+}
+
 export default function Planner() {
   const { state, setState } = useApp();
   const [offsetWeeks, setOffsetWeeks] = useState(0);
@@ -25,8 +42,18 @@ export default function Planner() {
     const value = item.date || "";
     return value >= isoDate(weekStart) && value <= isoDate(weekEnd) && !item.archived;
   }).sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`)), [state.plan, weekStart, weekEnd]);
-  const plannedKm = weekPlan.reduce((sum, item) => sum + Number(item.distance || 0), 0);
-  const completedKm = weekPlan.filter((item) => item.completed).reduce((sum, item) => sum + Number(item.distance || 0), 0);
+  const weekActivities = useMemo(() => state.activities.filter((activity) => {
+    const value = activityDate(activity);
+    return value >= isoDate(weekStart) && value <= isoDate(weekEnd);
+  }).sort((a, b) => String(a.startDateLocal || a.date).localeCompare(String(b.startDateLocal || b.date))), [state.activities, weekStart, weekEnd]);
+  const actualRunningKm = weekActivities.filter(isRunningActivity).reduce((sum, activity) => sum + Number(activity.distance || 0), 0);
+  const plannedKm = weekPlan.filter((item) => !item.completed).reduce((sum, item) => sum + Number(item.distance || 0), 0);
+  const completedKm = actualRunningKm || weekPlan.filter((item) => item.completed).reduce((sum, item) => sum + Number(item.distance || 0), 0);
+  const previousWeekHasPlan = useMemo(() => {
+    const previousStart = startOfWeek(new Date(), offsetWeeks - 1);
+    const previousEnd = dateForDay(previousStart, 6);
+    return state.plan.some((item) => !item.archived && item.date >= isoDate(previousStart) && item.date <= isoDate(previousEnd));
+  }, [state.plan, offsetWeeks]);
   const config = state.planner || {};
 
   function patchConfig(patch) {
@@ -45,16 +72,21 @@ export default function Planner() {
     } catch {
       setStatus("Standort/Wetter nicht verfügbar – Plan wird ohne Wetteranpassung erstellt.");
     }
-    const generated = generateWeekPlan({ activities: state.activities, mission: state.mission, config, forecast: weather, offsetWeeks });
+    const generated = generateWeekPlan({ activities: state.activities, mission: state.mission, config, forecast: weather, offsetWeeks, completedRunningKm: actualRunningKm });
+    const todayKey = isoDate(new Date());
     setState((current) => ({
       ...current,
       plan: [
-        ...current.plan.filter((item) => item.date < isoDate(weekStart) || item.date > isoDate(weekEnd) || item.source !== "planner-engine"),
+        ...current.plan.filter((item) => {
+          const outsideWeek = item.date < isoDate(weekStart) || item.date > isoDate(weekEnd);
+          const protectedEntry = item.source !== "planner-engine" || item.completed || (offsetWeeks === 0 && item.date < todayKey);
+          return outsideWeek || protectedEntry;
+        }),
         ...generated.plan,
       ],
       planner: { ...current.planner, lastGeneratedAt: new Date().toISOString(), lastTarget: generated.target },
     }));
-    setStatus(`Woche erstellt: ${generated.target} km Ziel, Basis Ø ${generated.recentAverage} km aus den letzten vier Wochen.`);
+    setStatus(`Woche erstellt: ${generated.target} km Ziel, davon ${actualRunningKm.toFixed(1)} km bereits gelaufen. Offen: ${generated.remainingTarget.toFixed(1)} km.`);
   }
 
   function saveWorkout(event) {
@@ -83,7 +115,7 @@ export default function Planner() {
     </PageTitle>
 
     <div className="planner-week-nav">
-      <button onClick={() => { setOffsetWeeks((v) => v - 1); setForecast([]); }}>←</button>
+      <button disabled={offsetWeeks === 0 && !previousWeekHasPlan} title={offsetWeeks === 0 && !previousWeekHasPlan ? "Keine ältere geplante Woche vorhanden" : "Vorherige Woche"} onClick={() => { setOffsetWeeks((v) => v - 1); setForecast([]); }}>←</button>
       <div><strong>{dayFormatter.format(weekStart)} – {dayFormatter.format(weekEnd)}</strong><span>{offsetWeeks === 0 ? "Aktuelle Woche" : offsetWeeks === 1 ? "Nächste Woche" : "Trainingswoche"}</span></div>
       <button onClick={() => { setOffsetWeeks((v) => v + 1); setForecast([]); }}>→</button>
     </div>
@@ -101,9 +133,9 @@ export default function Planner() {
     {status && <p className="planner-status">{status}</p>}
 
     <section className="planner-summary">
-      <div><span>Geplant</span><strong>{plannedKm} km</strong></div>
-      <div><span>Erledigt</span><strong>{completedKm} km</strong></div>
-      <div><span>Einheiten</span><strong>{weekPlan.length}</strong></div>
+      <div><span>Noch geplant</span><strong>{plannedKm} km</strong></div>
+      <div><span>Gelaufen</span><strong>{completedKm.toFixed(1)} km</strong></div>
+      <div><span>Erledigte Einheiten</span><strong>{weekActivities.length}</strong></div>
       <button onClick={() => setEditing(createBlank(weekStart))}>+ Einheit hinzufügen</button>
     </section>
 
@@ -112,10 +144,15 @@ export default function Planner() {
         const date = dateForDay(weekStart, index);
         const dateKey = isoDate(date);
         const entries = weekPlan.filter((item) => item.date === dateKey);
+        const actuals = weekActivities.filter((activity) => activityDate(activity) === dateKey);
         const dayWeather = forecast.find((item) => item.date === dateKey);
         return <article className="planner-day" key={dateKey}>
           <header><div><span>{dayFormatter.format(date)}</span><strong>{new Intl.DateTimeFormat("de-DE", { weekday: "long" }).format(date)}</strong></div>{dayWeather && <small>{dayWeather.maxTemp}° · Böen {dayWeather.maxGust} · Regen {dayWeather.rainChance}%</small>}</header>
-          {entries.length === 0 ? <button className="planner-empty" onClick={() => setEditing({ ...createBlank(weekStart), date: dateKey })}>+ frei</button> : entries.map((item) => <div className={`planner-workout ${item.completed ? "completed" : ""}`} key={item.id}>
+          {actuals.map((activity) => <div className="planner-workout planner-actual completed" key={`actual-${activity.id}`}>
+            <div className="planner-check">✓</div>
+            <div className="planner-workout-main"><div><span>{activityTime(activity) ? `${activityTime(activity)} · ` : ""}ERLEDIGT</span><em>{String(activity.source || "Garmin").toUpperCase()}</em></div><h3>{activity.name || activity.title || activity.type || "Training"}</h3><p>{activity.type || activity.sportType || "Einheit"}{Number(activity.distance || 0) ? ` · ${Number(activity.distance).toFixed(1)} km` : ""}{Number(activity.duration || 0) ? ` · ${Math.round(Number(activity.duration))} min` : ""}</p></div>
+          </div>)}
+          {entries.length === 0 && actuals.length === 0 ? <button className="planner-empty" onClick={() => setEditing({ ...createBlank(weekStart), date: dateKey })}>+ frei</button> : entries.map((item) => <div className={`planner-workout ${item.completed ? "completed" : ""}`} key={item.id}>
             <button className="planner-check" onClick={() => updateWorkout(item.id, { completed: !item.completed })}>{item.completed ? "✓" : ""}</button>
             <div className="planner-workout-main"><div><span>{item.time} · {item.optional ? "OPTIONAL" : "PFLICHT"}</span>{item.weatherAdjusted && <em>WETTER</em>}</div><h3>{item.title}</h3><p>{item.type}{item.distance ? ` · ${item.distance} km` : ""}{item.duration ? ` · ${item.duration} min` : ""}</p>{item.notes && <small>{item.notes}</small>}</div>
             <div className="planner-actions"><button onClick={() => setEditing(item)}>Bearbeiten</button><button onClick={() => updateWorkout(item.id, { archived: true })}>Archiv</button><button onClick={() => removeWorkout(item.id)}>Löschen</button></div>
