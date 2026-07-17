@@ -1,13 +1,15 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../context/AppContext";
 import { Card, PageTitle, Metric } from "../components/UI";
 import { daysUntil, fmtDate } from "../utils/format";
 import { buildEventAdvice, fetchEventForecast } from "../services/eventWeather";
+import { searchPlaces } from "../services/placeSearch";
 
 const emptyEvent = {
   name: "",
   date: "",
   location: "",
+  place: null,
   targetKm: "",
   weeklyTarget: "",
   isMainTarget: false,
@@ -19,6 +21,9 @@ export default function Mission() {
   const [editingId, setEditingId] = useState(null);
   const [forecasts, setForecasts] = useState({});
   const [showArchived, setShowArchived] = useState(false);
+  const [placeSuggestions, setPlaceSuggestions] = useState([]);
+  const [placeStatus, setPlaceStatus] = useState("");
+  const placeRequest = useRef(null);
   const total = state.activities.reduce((sum, activity) => sum + Number(activity.distance || 0), 0);
 
   const milestones = useMemo(
@@ -30,7 +35,42 @@ export default function Mission() {
 
   function change(event) {
     const { name, value, type, checked } = event.target;
-    setDraft((current) => ({ ...current, [name]: type === "checkbox" ? checked : value }));
+    setDraft((current) => ({
+      ...current,
+      [name]: type === "checkbox" ? checked : value,
+      ...(name === "location" ? { place: null } : {}),
+    }));
+  }
+
+  useEffect(() => {
+    const query = draft.location.trim();
+    if (draft.place || query.length < 3) {
+      setPlaceSuggestions([]);
+      setPlaceStatus("");
+      return undefined;
+    }
+
+    const timer = window.setTimeout(async () => {
+      placeRequest.current?.abort();
+      const controller = new AbortController();
+      placeRequest.current = controller;
+      setPlaceStatus("Orte werden gesucht …");
+      try {
+        const results = await searchPlaces(query, controller.signal);
+        setPlaceSuggestions(results);
+        setPlaceStatus(results.length ? "" : "Kein passender Ort gefunden.");
+      } catch (error) {
+        if (error.name !== "AbortError") setPlaceStatus(error.message);
+      }
+    }, 800);
+
+    return () => window.clearTimeout(timer);
+  }, [draft.location, draft.place]);
+
+  function selectPlace(place) {
+    setDraft((current) => ({ ...current, location: place.label, place }));
+    setPlaceSuggestions([]);
+    setPlaceStatus("");
   }
 
   function save(event) {
@@ -47,6 +87,7 @@ export default function Mission() {
         name: draft.name.trim(),
         date: draft.date,
         location: draft.location.trim(),
+        place: draft.place,
         targetKm: draft.targetKm === "" ? null : Number(draft.targetKm),
         weeklyTarget: draft.weeklyTarget === "" ? null : Number(draft.weeklyTarget),
         isMainTarget: Boolean(draft.isMainTarget),
@@ -90,6 +131,7 @@ export default function Mission() {
       name: item.name,
       date: item.date,
       location: item.location || "",
+      place: item.place || null,
       targetKm: item.targetKm ?? "",
       weeklyTarget: item.weeklyTarget ?? "",
       isMainTarget: Boolean(item.isMainTarget),
@@ -156,7 +198,7 @@ export default function Mission() {
   async function loadForecast(item) {
     setForecasts((current) => ({ ...current, [item.id]: { loading: true } }));
     try {
-      const forecast = await fetchEventForecast(item.location, item.date);
+      const forecast = await fetchEventForecast(item.place || item.location, item.date);
       setForecasts((current) => ({ ...current, [item.id]: forecast }));
     } catch (error) {
       setForecasts((current) => ({ ...current, [item.id]: { error: error.message } }));
@@ -195,7 +237,16 @@ export default function Mission() {
         <form className="editor-form mission-editor" onSubmit={save}>
           <label>Event<input name="name" value={draft.name} onChange={change} placeholder="Backyard Ultra" required /></label>
           <label>Datum<input name="date" type="date" value={draft.date} onChange={change} required /></label>
-          <label>Ort<input name="location" value={draft.location} onChange={change} placeholder="Fulda, Deutschland" /></label>
+          <label className="place-field">Ort
+            <input name="location" value={draft.location} onChange={change} placeholder="Sportpark Johannisau, Fulda" autoComplete="off" />
+            {draft.place && <small className="place-confirmed">✓ Ort aus OpenStreetMap übernommen</small>}
+            {placeStatus && <small className="muted">{placeStatus}</small>}
+            {placeSuggestions.length > 0 && <div className="place-suggestions" role="listbox" aria-label="Ortsvorschläge">
+              {placeSuggestions.map((place) => <button key={place.id} type="button" onClick={() => selectPlace(place)}>
+                <strong>{place.name}</strong><span>{place.label}</span>
+              </button>)}
+            </div>}
+          </label>
           <label>Zieldistanz (km)<input name="targetKm" type="number" min="0" step="0.1" value={draft.targetKm} onChange={change} /></label>
           <label>Wochenziel (km)<input name="weeklyTarget" type="number" min="0" step="1" value={draft.weeklyTarget} onChange={change} /></label>
           <label className="checkbox-label"><input name="isMainTarget" type="checkbox" checked={draft.isMainTarget} onChange={change} /> Als Hauptziel markieren</label>

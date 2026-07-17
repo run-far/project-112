@@ -46,7 +46,10 @@ export async function fetchEventForecast(location, date) {
     };
   }
 
-  const place = await geocodeLocation(location);
+  const savedPlace = typeof location === "object" && location?.latitude && location?.longitude
+    ? location
+    : null;
+  const place = savedPlace || await geocodeLocation(typeof location === "string" ? location : location?.label || location?.displayName || "");
   const params = new URLSearchParams({
     latitude: String(place.latitude),
     longitude: String(place.longitude),
@@ -67,7 +70,7 @@ export async function fetchEventForecast(location, date) {
   const data = await response.json();
   const daily = data.daily;
   return {
-    place: [place.name, place.admin1, place.country].filter(Boolean).join(", "),
+    place: place.label || place.displayName || [place.name, place.admin1, place.country].filter(Boolean).join(", "),
     condition: weatherLabels[daily.weather_code?.[0]] || "Unbekannt",
     max: Math.round(daily.temperature_2m_max?.[0]),
     min: Math.round(daily.temperature_2m_min?.[0]),

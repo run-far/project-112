@@ -1,22 +1,14 @@
-StrideHQ Ziele, Archiv und Equipment Patch
+StrideHQ OpenStreetMap-Ortssuche
 
-Enthalten:
-- Hauptziel ist jetzt ein normaler Event-Eintrag und kann bearbeitet werden.
-- Jeder Event kann per Checkbox als Hauptziel markiert werden.
-- Nur ein aktives Hauptziel gleichzeitig.
-- Meilensteine/Events: bearbeiten, archivieren, reaktivieren und endgültig löschen.
-- Equipment: Formular wie im Fuel Lab mit Typ-Auswahl, Name und optionalem Limit.
-- Equipment: archivieren, reaktivieren und endgültig löschen.
-- Fuel: endgültiges Löschen zusätzlich zum Archivieren/Reaktivieren.
-- Startseite zeigt unter dem Hauptziel automatisch das nächste aktive Rennen.
-- Bestehende lokale Daten werden beim Laden automatisch in das neue Zielmodell migriert.
+1. ZIP im Hauptordner von project-112 entpacken.
+2. Vorhandene Dateien ersetzen.
+3. Frontend neu starten: cd project112-app && npm run dev
 
-Installation:
-ZIP im Stammordner von project-112 entpacken und vorhandene Dateien ersetzen.
-Danach Frontend neu starten:
-  cd project112-app
-  npm run dev
+Neu:
+- Ortsvorschläge beim Tippen ab 3 Zeichen
+- Auswahl über OpenStreetMap/Nominatim
+- Speicherung von Anzeigename, Breiten- und Längengrad
+- Wetter nutzt anschließend direkt die gespeicherten Koordinaten
+- Manuelle Ortsangaben bleiben weiterhin möglich
 
-Geprüft mit:
-- npm run build
-- npm run lint
+Hinweis: Die öffentliche Nominatim-Suche ist für die lokale/private Nutzung gedacht und wird durch eine Verzögerung gedrosselt.
