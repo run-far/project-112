@@ -4,6 +4,7 @@ import { Card, PageTitle } from "../components/UI";
 import { fmtDate, pace, hours } from "../utils/format";
 import ReviewModal from "../components/ReviewModal";
 import { fetchActivities, mapRunningActivities } from "../services/strava";
+import WeekPlan from "../components/WeekPlan";
 
 function formatSyncTime(value) {
   if (!value) return "Noch nicht synchronisiert";
@@ -148,6 +149,8 @@ export default function Training() {
           </div>
         )}
       </Card>
+
+      <WeekPlan />
 
       {selected && (
         <ReviewModal activity={selected} onClose={() => setSelected(null)} />

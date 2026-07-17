@@ -137,6 +137,66 @@ app.get("/api/strava/activities", async (request, response) => {
   }
 });
 
+
+app.get("/api/strava/activities/all", async (request, response) => {
+  try {
+    const accessToken = request.headers.authorization
+      ?.replace(/^Bearer\s+/i, "")
+      .trim();
+
+    if (!accessToken) {
+      return response.status(401).json({ message: "Access Token fehlt." });
+    }
+
+    const after = Math.max(0, Number(request.query.after || 0));
+    const perPage = 100;
+    const activities = [];
+
+    for (let page = 1; page <= 100; page += 1) {
+      const params = new URLSearchParams({
+        page: String(page),
+        per_page: String(perPage),
+      });
+
+      if (after > 0) params.set("after", String(after));
+
+      const stravaResponse = await fetch(
+        `https://www.strava.com/api/v3/athlete/activities?${params}`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: "application/json",
+          },
+          signal: AbortSignal.timeout(20_000),
+        },
+      );
+
+      const data = await stravaResponse.json();
+
+      if (!stravaResponse.ok) {
+        return response.status(stravaResponse.status).json({
+          message: data?.message || "Strava-Aktivitäten konnten nicht geladen werden.",
+          details: data,
+        });
+      }
+
+      if (!Array.isArray(data)) {
+        return response.status(502).json({ message: "Unerwartete Antwort von Strava." });
+      }
+
+      activities.push(...data);
+      if (data.length < perPage) break;
+    }
+
+    return response.json({ activities, count: activities.length, after });
+  } catch (error) {
+    console.error("Full activities sync error:", error);
+    return response.status(500).json({
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
 app.listen(port, () => {
   console.log(`StrideHQ server on ${port}`);
   console.log(`Strava Client-ID configured: ${Boolean(process.env.STRAVA_CLIENT_ID)}`);

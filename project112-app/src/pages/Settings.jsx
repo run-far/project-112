@@ -21,6 +21,8 @@ export default function Settings() {
     const oauthError = params.get("error");
 
     if (oauthError) {
+      // OAuth callback is handled once on page load.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMessage("Strava-Verbindung wurde abgebrochen.");
       window.history.replaceState({}, "", window.location.pathname);
       return;
@@ -54,7 +56,7 @@ export default function Settings() {
         }));
 
         setMessage(
-          `${runningActivities.length} Lauf${runningActivities.length === 1 ? "" : "e"} aus Strava geladen.`,
+          `${runningActivities.length} Lauf${runningActivities.length === 1 ? "" : "e"} seit 01.01.2025 aus Strava geladen.`,
         );
         window.history.replaceState({}, "", window.location.pathname);
       } catch (error) {
