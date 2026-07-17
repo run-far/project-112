@@ -1,3 +1,40 @@
-import {createContext,useContext,useEffect,useMemo,useState} from 'react';import {demoActivities,defaultEquipment,defaultFuel,defaultPlan,mission} from '../data/defaults';import {loadState,saveState} from '../services/storage';
-const C=createContext();const defaults={activities:demoActivities,reviews:{},plan:defaultPlan,equipment:defaultEquipment,fuel:defaultFuel,mission,strava:{connected:false,athlete:null,token:null}};
-export function AppProvider({children}){const [state,setState]=useState(()=>loadState(defaults));useEffect(()=>saveState(state),[state]);const api=useMemo(()=>({state,setState,upsertReview:(id,r)=>setState(s=>({...s,reviews:{...s.reviews,[id]:r}})),setActivities:a=>setState(s=>({...s,activities:a})),addActivity:a=>setState(s=>({...s,activities:[a,...s.activities]}))}),[state]);return <C.Provider value={api}>{children}</C.Provider>};export const useApp=()=>useContext(C);
+/* eslint-disable react-refresh/only-export-components */
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { defaultState } from "../data/defaults";
+import { loadState, saveState } from "../services/storage";
+
+const AppContext = createContext(null);
+
+export function AppProvider({ children }) {
+  const [state, setState] = useState(() => loadState(defaultState));
+
+  useEffect(() => saveState(state), [state]);
+
+  const api = useMemo(
+    () => ({
+      state,
+      setState,
+      upsertReview: (id, review) =>
+        setState((current) => ({
+          ...current,
+          reviews: { ...current.reviews, [id]: review },
+        })),
+      setActivities: (activities) =>
+        setState((current) => ({ ...current, activities })),
+      addActivity: (activity) =>
+        setState((current) => ({
+          ...current,
+          activities: [activity, ...current.activities],
+        })),
+    }),
+    [state],
+  );
+
+  return <AppContext.Provider value={api}>{children}</AppContext.Provider>;
+}
+
+export function useApp() {
+  const context = useContext(AppContext);
+  if (!context) throw new Error("useApp muss innerhalb des AppProvider verwendet werden.");
+  return context;
+}
