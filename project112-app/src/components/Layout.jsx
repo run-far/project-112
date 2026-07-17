@@ -1,0 +1,3 @@
+import {NavLink,Outlet} from 'react-router-dom';
+const links=[['/','Briefing','◉'],['/mission','Mission','◎'],['/training','Training','↗'],['/coach','Coach','✦'],['/fuel','Fuel Lab','◒'],['/equipment','Equipment','◇'],['/analytics','Analytics','▥'],['/settings','Settings','⚙']];
+export default function Layout(){return <div className="shell"><aside><div className="brand"><b>StrideHQ</b><span>Every run teaches you something.</span></div><nav>{links.map(([to,n,i])=><NavLink key={to} to={to} end={to==='/' }><i>{i}</i>{n}</NavLink>)}</nav><div className="aside-foot">MISSION 01<br/><strong>112 KM</strong></div></aside><main className="content"><Outlet/></main></div>}
