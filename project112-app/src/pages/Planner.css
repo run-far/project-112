@@ -13,3 +13,13 @@
 .planner-actual .planner-check {
   cursor: default;
 }
+
+.planner-attention{width:100%;display:flex;justify-content:space-between;align-items:center;gap:18px;text-align:left;margin:16px 0;padding:15px 18px;border:1px solid #9d493f;background:rgba(154,47,39,.16);color:#ffd7d2;border-radius:14px}.planner-attention strong{white-space:nowrap}.planner-attention span{color:#e9b8b2}.planner-workout.missed{border-left:3px solid #e75d50;background:rgba(128,31,25,.13)}.planner-workout.missed .planner-check{border-color:#e75d50;color:#ff9a90}.planner-workout.missed .planner-workout-main>div span{color:#ff766c}.planner-actions .danger{border-color:#9d493f;color:#ff9a90}.planner-reasons{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0}.planner-reasons button{background:#0c1912;border:1px solid #294033}.planner-reasons button.selected{border-color:#5ee494;background:#173523;color:#8dffba}.planner-modal button:disabled{opacity:.45;cursor:not-allowed}@media(max-width:700px){.planner-attention{align-items:flex-start;flex-direction:column;gap:5px}.planner-attention strong{white-space:normal}}
+
+.planner-setup { max-width: 760px; }
+.planner-day-picker { margin: 18px 0; }
+.planner-day-picker > strong { display: block; margin-bottom: 9px; }
+.planner-day-picker > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.planner-day-picker button { min-width: 44px; padding: 9px 11px; border-radius: 999px; }
+.planner-day-picker button.selected { background: var(--accent, #54ff9f); color: #04130b; border-color: transparent; }
+.planner-day-picker small { display: block; margin-top: 8px; opacity: .7; }

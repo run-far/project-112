@@ -1,22 +1,24 @@
-StrideHQ Wochenplaner Patch
+StrideHQ Planner Rules Patch
 
 Enthalten:
-- neue Seite "Wochenplan"
-- intelligente Wochengenerierung
+- automatische Zuordnung realer Garmin/Strava-Aktivitäten zu geplanten Einheiten
+- verpasste Einheiten rot markieren und Rückmeldung abfragen
+- Planungsdialog vor der intelligenten Wochenplanung
 - Montag Fußball fix
 - Mittwoch ORC Run fix
 - Samstag ORC Track optional
-- Stabi oder Rudern am Donnerstag
-- Wetteranpassung über Open-Meteo
-- Laufband bei Hitze, starken Böen oder Gewitter
-- Einheiten bearbeiten, archivieren, löschen und abhaken
-- aktuelle und kommende Wochen
-- ICS-Export mit echten Datumswerten
+- Stabi standardmäßig 2x pro Woche
+- Rudern standardmäßig 1x pro Woche
+- Anzahl und Tage für Stabi/Rudern frei wählbar
+- Zusatzläufe: Anzahl, Distanz und Tage frei wählbar
+- Doppeltrainingstage frei wählbar
+- Einstellungen werden für die nächste Planung gespeichert
 
 Installation:
-1. ZIP im Repository-Stamm entpacken.
-2. Vorhandene Dateien ersetzen.
-3. Im Ordner project112-app ausführen:
-   npm run dev
+ZIP im Repository-Stamm entpacken und vorhandene Dateien ersetzen.
+Dann im Ordner project112-app:
+  npm run dev
 
-Es werden keine neuen npm-Pakete benötigt.
+Validiert mit:
+  npm run build
+  npm run lint
