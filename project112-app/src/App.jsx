@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { HashRouter, Routes, Route } from "react-router-dom";
 import Layout from "./components/Layout";
 import Briefing from "./pages/Briefing";
 import Mission from "./pages/Mission";
@@ -19,5 +19,5 @@ export default function App() {
   if (!session) return <Auth />;
   const params = new URLSearchParams(window.location.search);
   const stravaCallback = params.get("connection") === "strava" && (params.get("code") || params.get("error"));
-  return <BrowserRouter basename={import.meta.env.BASE_URL}>{stravaCallback ? <StravaCallback /> : <Routes><Route element={<Layout />}><Route index element={<Briefing />} /><Route path="mission" element={<Mission />} /><Route path="training" element={<Training />} /><Route path="planner" element={<Planner />} /><Route path="coach" element={<Coach />} /><Route path="fuel" element={<Fuel />} /><Route path="equipment" element={<Equipment />} /><Route path="analytics" element={<Analytics />} /><Route path="settings" element={<Settings />} /></Route></Routes>}</BrowserRouter>;
+  return <HashRouter>{stravaCallback ? <StravaCallback /> : <Routes><Route element={<Layout />}><Route index element={<Briefing />} /><Route path="mission" element={<Mission />} /><Route path="training" element={<Training />} /><Route path="planner" element={<Planner />} /><Route path="coach" element={<Coach />} /><Route path="fuel" element={<Fuel />} /><Route path="equipment" element={<Equipment />} /><Route path="analytics" element={<Analytics />} /><Route path="settings" element={<Settings />} /></Route></Routes>}</HashRouter>;
 }

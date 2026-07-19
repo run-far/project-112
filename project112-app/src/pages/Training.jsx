@@ -9,6 +9,7 @@ import { intervalsOnlineReady } from "../services/intervals";
 import {
   activityDate,
   activityTimestamp,
+  isRunningActivity,
   isoDateLocal,
   isoWeekNumber,
   monthKey,
@@ -19,6 +20,7 @@ import {
   sportGroup,
   startOfIsoWeek,
 } from "../services/activityUtils";
+import { activitiesWithGroups, canGroupActivities, suggestedGroupName } from "../services/activityGroups";
 
 const monthFormatter = new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" });
 const shortDateFormatter = new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit" });
@@ -54,13 +56,16 @@ function summaries(activities) {
 }
 
 export default function Training() {
-  const { state, addActivity, updateActivity, syncStravaNow, syncIntervalsNow, intervalsSyncStatus } = useApp();
+  const { state, setState, addActivity, updateActivity, syncStravaNow, syncIntervalsNow, intervalsSyncStatus } = useApp();
   const [selected, setSelected] = useState(null);
   const [editingName, setEditingName] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState("");
+  const [mergeMode, setMergeMode] = useState(false);
+  const [mergeSelection, setMergeSelection] = useState([]);
 
-  const activities = useMemo(() => preferredActivities(state.activities, { hideStrava: Boolean(state.intervals?.connected) }), [state.activities, state.intervals?.connected]);
+  const rawActivities = useMemo(() => preferredActivities(state.activities, { hideStrava: Boolean(state.intervals?.connected) }), [state.activities, state.intervals?.connected]);
+  const activities = useMemo(() => activitiesWithGroups(rawActivities, state.activityGroups), [rawActivities, state.activityGroups]);
   const currentMonth = new Date().toISOString().slice(0, 7);
   const currentMonthActivities = activities.filter((activity) => monthKey(activity) === currentMonth);
   const currentMonthSummary = useMemo(() => summaries(currentMonthActivities), [currentMonthActivities]);
@@ -109,6 +114,14 @@ export default function Training() {
 
   function saveActivityName(nextName) {
     if (!editingName) return;
+    if (editingName.isActivityGroup) {
+      setState((current) => ({
+        ...current,
+        activityGroups: current.activityGroups.map((group) => group.id === editingName.id ? { ...group, name: nextName } : group),
+      }));
+      setEditingName(null);
+      return;
+    }
     const sourceName = editingName.sourceName || editingName.name;
     updateActivity(editingName.id, {
       name: nextName,
@@ -118,6 +131,50 @@ export default function Training() {
     });
     if (selected?.id === editingName.id) setSelected((current) => ({ ...current, name: nextName, sourceName }));
     setEditingName(null);
+  }
+
+  function toggleMergeMode() {
+    setMergeMode((value) => !value);
+    setMergeSelection([]);
+  }
+
+  function toggleMergeActivity(activity) {
+    if (!isRunningActivity(activity) || state.reviews[activity.id]) return;
+    setMergeSelection((current) => {
+      if (current.includes(activity.id)) return current.filter((id) => id !== activity.id);
+      const selectedActivities = current.map((id) => rawActivities.find((item) => item.id === id)).filter(Boolean);
+      if (selectedActivities.length && !canGroupActivities([...selectedActivities, activity])) return current;
+      return [...current, activity.id];
+    });
+  }
+
+  function mergeActivities() {
+    const selectedActivities = mergeSelection.map((id) => rawActivities.find((activity) => activity.id === id)).filter(Boolean);
+    if (!canGroupActivities(selectedActivities)) {
+      setMessage("Wähle mindestens zwei Läufe desselben Tages aus.");
+      return;
+    }
+    const suggestion = suggestedGroupName(selectedActivities);
+    const name = window.prompt("Name der zusammengefassten Einheit", suggestion)?.trim();
+    if (!name) return;
+    setState((current) => ({
+      ...current,
+      activityGroups: [...current.activityGroups, {
+        id: `activity-group-${crypto.randomUUID()}`,
+        name,
+        memberActivityIds: selectedActivities.map((activity) => activity.id),
+        createdAt: new Date().toISOString(),
+      }],
+    }));
+    setMergeSelection([]);
+    setMergeMode(false);
+    setMessage(`${selectedActivities.length} Teilaktivitäten wurden zu „${name}“ zusammengefasst.`);
+  }
+
+  function dissolveGroup(activity) {
+    if (!activity.isActivityGroup || state.reviews[activity.id]) return;
+    if (!window.confirm("Zusammenfassung aufheben? Die einzelnen Aktivitäten werden wieder separat angezeigt.")) return;
+    setState((current) => ({ ...current, activityGroups: current.activityGroups.filter((group) => group.id !== activity.id) }));
   }
 
   async function syncStrava() {
@@ -157,9 +214,15 @@ export default function Training() {
         <div className="page-actions">
           {state.intervals?.connected && intervalsOnlineReady() && <button onClick={syncIntervals} disabled={intervalsSyncStatus === "syncing"}>{intervalsSyncStatus === "syncing" ? "Synchronisiere …" : "↻ Intervals.icu"}</button>}
           {state.strava.connected && stravaOnlineReady() && <button className="strava" onClick={syncStrava} disabled={syncing}>{syncing ? "Synchronisiere …" : "↻ Strava"}</button>}
+          <button onClick={toggleMergeMode}>{mergeMode ? "Zusammenfassen beenden" : "⇄ Läufe zusammenfassen"}</button>
           <button onClick={addManualActivity}>+ Manuell</button>
         </div>
       </PageTitle>
+
+      {mergeMode && <Card className="wide merge-activity-bar">
+        <div><strong>Läufe eines Tages zusammenfassen</strong><span>Wähle Aufwärmen, ORC Track und Auslaufen. Distanz, Dauer und Höhenmeter werden addiert; du gibst nur eine Review ab.</span></div>
+        <div><b>{mergeSelection.length} ausgewählt</b><button className="primary" onClick={mergeActivities} disabled={mergeSelection.length < 2}>Zusammenfassen</button></div>
+      </Card>}
 
       <Card className="wide training-month-overview">
         <div className="card-heading-row">
@@ -204,14 +267,18 @@ export default function Training() {
                       {weekActivities.map((activity) => {
                         const kind = reviewKind(activity);
                         return (
-                          <article className={`activity-row ${kind ? "reviewable" : "no-review"}`} key={activity.id}>
-                            <button className="activity activity-main" onClick={() => kind && setSelected(activity)} disabled={!kind} title={kind ? `${reviewKindLabel(activity)} öffnen` : "Für diese Aktivität ist kein Review nötig"}>
-                              <div><b>{activity.name}</b><span>{fmtDate(activityDate(activity))} · {sourceLabel(activity)} · {sportGroup(activity).label}{activity.weather?.temperature != null || activity.temperature != null ? ` · ${Math.round(Number(activity.weather?.temperature ?? activity.temperature))} °C` : ""}</span></div>
-                              <div className="activity-metrics"><strong>{Number(activity.distance || 0).toLocaleString("de-DE")} km</strong><span>{hours(activity.duration)} · {Number(activity.distance || 0) > 0 ? pace(activity.distance, activity.duration) : "–"}</span></div>
+                          <article className={`activity-row ${kind ? "reviewable" : "no-review"} ${mergeSelection.includes(activity.id) ? "merge-selected" : ""} ${activity.isActivityGroup ? "activity-group-row" : ""} ${mergeMode && !activity.isActivityGroup && isRunningActivity(activity) ? "merge-candidate" : ""}`} key={activity.id}>
+                            {mergeMode && !activity.isActivityGroup && isRunningActivity(activity) && <button type="button" className="activity-merge-check" disabled={Boolean(state.reviews[activity.id])} onClick={() => toggleMergeActivity(activity)} aria-label={`${activity.name} auswählen`}>{mergeSelection.includes(activity.id) ? "✓" : "○"}</button>}
+                            <button className="activity activity-main" onClick={() => mergeMode && !activity.isActivityGroup ? toggleMergeActivity(activity) : kind && setSelected(activity)} disabled={!kind && !mergeMode} title={mergeMode ? "Zum Zusammenfassen auswählen" : kind ? `${reviewKindLabel(activity)} öffnen` : "Für diese Aktivität ist kein Review nötig"}>
+                              <div><b>{activity.name}</b><span>{fmtDate(activityDate(activity))} · {sourceLabel(activity)} · {sportGroup(activity).label}{activity.isActivityGroup ? ` · ${activity.memberCount} Teile` : ""}{activity.weather?.temperature != null || activity.temperature != null ? ` · ${Math.round(Number(activity.weather?.temperature ?? activity.temperature))} °C` : ""}</span></div>
+                              <div className="activity-metrics"><strong>{Number(activity.distance || 0).toLocaleString("de-DE", { maximumFractionDigits: 2 })} km</strong><span>{hours(activity.duration)} · {Number(activity.distance || 0) > 0 ? pace(activity.distance, activity.duration) : "–"}</span></div>
                               <div className="activity-secondary"><strong>{activity.elevation || 0} hm</strong><span>{activity.avgHr ? `Ø ${activity.avgHr} bpm` : "Kein Puls"}</span></div>
                               <em>{kind ? (state.reviews[activity.id] ? "✓ Review" : month.key === currentMonth ? "Review öffnen" : "Review optional") : "Kein Review nötig"}</em>
                             </button>
-                            <button className="activity-edit-button" onClick={() => setEditingName(activity)} aria-label={`${activity.name} umbenennen`} title="Trainingsname ändern">✎</button>
+                            <div className="activity-row-actions">
+                              <button className="activity-edit-button" onClick={() => setEditingName(activity)} aria-label={`${activity.name} umbenennen`} title="Trainingsname ändern">✎</button>
+                              {activity.isActivityGroup && !state.reviews[activity.id] && <button className="activity-edit-button activity-unmerge-button" onClick={() => dissolveGroup(activity)} aria-label="Zusammenfassung aufheben" title="Zusammenfassung aufheben">↩</button>}
+                            </div>
                           </article>
                         );
                       })}

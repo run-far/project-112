@@ -10,6 +10,7 @@ import {
   reviewKindLabel,
 } from "../services/activityUtils";
 import ReviewModal from "../components/ReviewModal";
+import { activitiesWithGroups } from "../services/activityGroups";
 import { fmtDate } from "../utils/format";
 
 const monthFormatter = new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" });
@@ -20,9 +21,10 @@ export default function Coach() {
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const canonicalActivities = useMemo(() => preferredActivities(state.activities), [state.activities]);
-  const monthReviewable = useMemo(() => canonicalActivities
+  const reviewActivities = useMemo(() => activitiesWithGroups(canonicalActivities, state.activityGroups), [canonicalActivities, state.activityGroups]);
+  const monthReviewable = useMemo(() => reviewActivities
     .filter((activity) => reviewKind(activity) && activityDate(activity).startsWith(currentMonth))
-    .sort((a, b) => activityTimestamp(b) - activityTimestamp(a)), [canonicalActivities, currentMonth]);
+    .sort((a, b) => activityTimestamp(b) - activityTimestamp(a)), [reviewActivities, currentMonth]);
   const openReviews = monthReviewable.filter((activity) => !state.reviews[activity.id]);
   const reviewed = monthReviewable.filter((activity) => state.reviews[activity.id]);
   const learned = reviewed

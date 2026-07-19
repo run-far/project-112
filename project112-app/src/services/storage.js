@@ -12,6 +12,7 @@ function sanitizeState(state, defaults) {
     activities: Array.isArray(state?.activities)
       ? state.activities.filter((activity) => !isDemoEntry(activity))
       : [],
+    activityGroups: Array.isArray(state?.activityGroups) ? state.activityGroups : [],
     plan: Array.isArray(state?.plan)
       ? state.plan.filter((item) => !isDemoEntry(item))
       : [],

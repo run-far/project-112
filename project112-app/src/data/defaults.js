@@ -36,6 +36,7 @@ export const mission = {
 export const defaultState = {
   activities: [],
   reviews: {},
+  activityGroups: [],
   plan: [],
   equipment: [],
   fuel: [],

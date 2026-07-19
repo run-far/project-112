@@ -5,6 +5,7 @@ import { hydration } from "../services/insights";
 import { eventTitleFor, isOfficialEvent } from "../services/achievements";
 import { isRoadCyclingActivity, reviewKind, reviewKindLabel } from "../services/activityUtils";
 import { fetchActivityWeather } from "../services/activityWeather";
+import { useModalScrollLock } from "../services/modalScrollLock";
 
 const emptyNutritionItem = () => ({
   id: crypto.randomUUID(),
@@ -30,6 +31,7 @@ function ZeroScore({ label, value, onChange, help }) {
 
 export default function ReviewModal({ activity, onClose }) {
   const { state, upsertReview, updateActivity } = useApp();
+  useModalScrollLock(true);
   const [saveError, setSaveError] = useState("");
   const kind = reviewKind(activity);
   const old = state.reviews[activity.id] || {};
@@ -97,7 +99,11 @@ export default function ReviewModal({ activity, onClose }) {
 
   const nutritionSummary = useMemo(() => {
     const items = review.usedNutrition ? review.nutritionItems : [];
-    const totalCarbs = items.reduce((sum, item) => sum + (Number(item.quantity || 0) * Number(item.carbohydratesPerUnit || 0)), 0);
+    const totalCarbs = items.reduce((sum, item) => {
+      const quantity = Number(item.quantity || 0);
+      const carbohydrates = Number(item.carbohydratesPerUnit || 0);
+      return sum + (item.unit === "ml" ? (quantity / 100) * carbohydrates : quantity * carbohydrates);
+    }, 0);
     const durationHours = Number(activity.durationSeconds || 0) > 0
       ? Number(activity.durationSeconds) / 3600
       : Number(activity.duration || 0) / 60;
@@ -118,6 +124,28 @@ export default function ReviewModal({ activity, onClose }) {
 
   const set = (key, value) => setReview((current) => ({ ...current, [key]: value }));
   const hydrationResult = kind === "endurance" ? hydration(activity, review) : null;
+
+
+  function updateDrink(value) {
+    setReview((current) => {
+      const amount = String(value || "");
+      const withoutAutomatic = current.nutritionItems.filter((item) => !item.hydrationLinked);
+      if (!Number(amount)) return { ...current, drinkMl: amount, nutritionItems: withoutAutomatic };
+      const automatic = current.nutritionItems.find((item) => item.hydrationLinked && !item.fuelItemId) || {
+        ...emptyNutritionItem(),
+        type: "Elektrolyte",
+        product: "Getränk / Elektrolyte",
+        unit: "ml",
+        carbohydratesPerUnit: "",
+        affectsInventory: false,
+        hydrationLinked: true,
+      };
+      const nutritionItems = current.nutritionItems.some((item) => item.id === automatic.id)
+        ? current.nutritionItems.map((item) => item.id === automatic.id ? { ...item, quantity: amount, type: "Elektrolyte", unit: "ml" } : item)
+        : [...withoutAutomatic, { ...automatic, quantity: amount }];
+      return { ...current, drinkMl: amount, usedNutrition: true, nutritionItems };
+    });
+  }
 
   function toggleEvent(checked) {
     setReview((current) => ({
@@ -169,6 +197,7 @@ export default function ReviewModal({ activity, onClose }) {
         quantity: item.quantity || "1",
         carbohydratesPerUnit: selected.carbs ?? item.carbohydratesPerUnit ?? "",
         affectsInventory: inventoryApplies(selected),
+        hydrationLinked: false,
       } : {
         ...item,
         fuelItemId: "",
@@ -223,18 +252,19 @@ export default function ReviewModal({ activity, onClose }) {
       carbohydrateStatus: kind === "endurance" ? nutritionSummary.status : null,
       weather: weather || old.weather || null,
       updatedAt: new Date().toISOString(),
-    });
+    }, { memberIds: activity.memberActivityIds || [] });
     onClose();
   }
 
   const enduranceTitle = isRoadCyclingActivity(activity) ? "Rennrad Review" : "Workout Review";
 
   return (
-    <div className="modal-backdrop">
+    <div className="modal-backdrop" role="presentation">
       <form className={`modal review-modal review-${kind}`} onSubmit={save}>
         <button type="button" className="close" onClick={onClose}>×</button>
         <p className="eyebrow">{kind === "strength" ? reviewKindLabel(activity) : enduranceTitle}</p>
         <h2>{activity.name}</h2>
+        {activity.isActivityGroup && <div className="review-group-summary"><strong>{activity.memberCount} Teilaktivitäten zusammengefasst</strong><span>{Number(activity.distance || 0).toFixed(1)} km · {activity.elevation || 0} hm · {Math.round(Number(activity.duration || 0))} min</span></div>}
 
         {kind === "endurance" ? (
           <>
@@ -245,7 +275,7 @@ export default function ReviewModal({ activity, onClose }) {
               <Score label="Anstrengung" value={review.rpe} onChange={(value) => set("rpe", Number(value))} />
             </div>
             <div className="form-grid">
-              <label>Getrunken (ml)<input type="number" min="0" value={review.drinkMl} onChange={(event) => set("drinkMl", event.target.value)} /></label>
+              <label>Getrunken (ml)<input type="number" min="0" value={review.drinkMl} onChange={(event) => updateDrink(event.target.value)} /></label>
               <label>Schwitzen<select value={review.sweat} onChange={(event) => set("sweat", event.target.value)}><option>niedrig</option><option>mittel</option><option>hoch</option></select></label>
               <label>Gewicht vorher (kg)<input type="number" step="0.1" value={review.weightBefore} onChange={(event) => set("weightBefore", event.target.value)} /></label>
               <label>Gewicht nachher (kg)<input type="number" step="0.1" value={review.weightAfter} onChange={(event) => set("weightAfter", event.target.value)} /></label>
@@ -312,7 +342,7 @@ export default function ReviewModal({ activity, onClose }) {
                         </label>
                         <label>Hersteller<input value={item.manufacturer} onChange={(event) => updateNutritionItem(item.id, "manufacturer", event.target.value)} placeholder="z. B. Maurten" /></label>
                         <label>Produkt<input value={item.product} onChange={(event) => updateNutritionItem(item.id, "product", event.target.value)} placeholder="z. B. Gel 100" /></label>
-                        <label>Carbs pro Einheit (g)<input type="number" min="0" step="0.1" value={item.carbohydratesPerUnit ?? ""} onChange={(event) => updateNutritionItem(item.id, "carbohydratesPerUnit", event.target.value)} /></label>
+                        <label>{item.unit === "ml" ? "Carbs pro 100 ml (g)" : "Carbs pro Einheit (g)"}<input type="number" min="0" step="0.1" value={item.carbohydratesPerUnit ?? ""} onChange={(event) => updateNutritionItem(item.id, "carbohydratesPerUnit", event.target.value)} /></label>
                         <label>Menge<input type="number" min="0" step="0.1" value={item.quantity} onChange={(event) => updateNutritionItem(item.id, "quantity", event.target.value)} /></label>
                         <label>Einheit<select value={item.unit} onChange={(event) => updateNutritionItem(item.id, "unit", event.target.value)} disabled={Boolean(item.fuelItemId)}><option>Stück</option><option>Portionen</option><option>ml</option><option>g</option><option>Tabletten</option><option>Beutel</option></select></label>
                       </div>

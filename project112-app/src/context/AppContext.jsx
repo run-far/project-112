@@ -45,17 +45,55 @@ function normalizeInventory(activities, items, reviews) {
   };
 }
 
+
+function migrateReviewFuelCatalog(inputState = {}) {
+  const normalize = (value) => String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const fuel = asArray(inputState.fuel).map((item) => ({ ...item }));
+  Object.values(inputState.reviews || {}).forEach((review) => {
+    (Array.isArray(review?.nutritionItems) ? review.nutritionItems : []).forEach((item) => {
+      if (!String(item.product || "").trim() || item.hydrationLinked) return;
+      const category = item.type === "Salz" ? "Kapseln" : item.type || "Sonstiges";
+      const exists = fuel.some((candidate) => (
+        normalize(candidate.name) === normalize(item.product)
+        && normalize(candidate.brand) === normalize(item.manufacturer)
+        && candidate.category === category
+      ));
+      if (exists) return;
+      fuel.push({
+        id: crypto.randomUUID(),
+        brand: String(item.manufacturer || "").trim(),
+        name: String(item.product || "").trim(),
+        category,
+        carbs: Number(item.carbohydratesPerUnit || 0),
+        caffeine: 0,
+        quantity: 0,
+        stockUnit: item.unit === "Tabletten" ? "Tabletten" : item.unit === "Beutel" ? "Beutel" : item.unit === "Portionen" ? "Portionen" : "Stück",
+        barcode: "",
+        imageUrl: "",
+        packageSize: "",
+        source: "Review",
+        archived: false,
+        rating: 0,
+        tolerance: 0,
+        stockTrackedFrom: new Date().toISOString().slice(0, 10),
+      });
+    });
+  });
+  return { ...inputState, fuel };
+}
+
 function mergeState(localState = {}, cloudState = {}) {
   const local = localState || {};
   const cloud = cloudState || {};
   const activities = asArray(cloud.activities, asArray(local.activities));
   const reviews = { ...(local.reviews || {}), ...(cloud.reviews || {}) };
   const inventory = normalizeInventory(activities, cloud.fuel ?? local.fuel, reviews);
-  return {
+  const merged = {
     ...defaultState,
     ...local,
     ...cloud,
     activities,
+    activityGroups: asArray(cloud.activityGroups, asArray(local.activityGroups)),
     plan: asArray(cloud.plan, asArray(local.plan)),
     equipment: asArray(cloud.equipment, asArray(local.equipment)),
     fuel: inventory.fuel,
@@ -80,6 +118,7 @@ function mergeState(localState = {}, cloudState = {}) {
       refreshToken: local.strava?.refreshToken || null,
     },
   };
+  return migrateReviewFuelCatalog(merged);
 }
 
 function stateForCloud(state) {
@@ -345,21 +384,67 @@ export function AppProvider({ children }) {
     uploadLocalState,
     reloadCloudState,
     logout: signOut,
-    upsertReview: (id, review) => setState((current) => {
+    upsertReview: (id, review, options = {}) => setState((current) => {
+      const normalize = (value) => String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
       const usage = (items) => (Array.isArray(items) ? items : []).reduce((result, item) => {
         if (!item.fuelItemId || item.affectsInventory === false) return result;
         result[item.fuelItemId] = (result[item.fuelItemId] || 0) + (Number(item.quantity) || 0);
         return result;
       }, {});
+
+      const fuel = [...current.fuel];
+      const nutritionItems = (Array.isArray(review.nutritionItems) ? review.nutritionItems : []).map((item) => {
+        if (item.fuelItemId || !String(item.product || "").trim() || item.hydrationLinked) return item;
+        const category = item.type === "Salz" ? "Kapseln" : item.type || "Sonstiges";
+        const match = fuel.find((candidate) => (
+          normalize(candidate.name) === normalize(item.product)
+          && normalize(candidate.brand) === normalize(item.manufacturer)
+          && candidate.category === category
+        ));
+        if (match) return { ...item, fuelItemId: match.id, affectsInventory: false };
+        const created = {
+          id: crypto.randomUUID(),
+          brand: String(item.manufacturer || "").trim(),
+          name: String(item.product || "").trim(),
+          category,
+          carbs: Number(item.carbohydratesPerUnit || 0),
+          caffeine: 0,
+          quantity: 0,
+          stockUnit: item.unit === "Tabletten" ? "Tabletten" : item.unit === "Beutel" ? "Beutel" : item.unit === "Portionen" ? "Portionen" : "Stück",
+          barcode: "",
+          imageUrl: "",
+          packageSize: "",
+          source: "Review",
+          archived: false,
+          rating: 0,
+          tolerance: 0,
+          stockTrackedFrom: new Date().toISOString().slice(0, 10),
+        };
+        fuel.push(created);
+        return { ...item, fuelItemId: created.id, affectsInventory: false };
+      });
+
+      const normalizedReview = { ...review, nutritionItems };
       const previousUsage = usage(current.reviews[id]?.nutritionItems);
-      const nextUsage = usage(review.nutritionItems);
-      const fuel = current.fuel.map((item) => {
+      const nextUsage = usage(nutritionItems);
+      const adjustedFuel = fuel.map((item) => {
         const restored = Number(previousUsage[item.id] || 0);
         const consumed = Number(nextUsage[item.id] || 0);
         if (!restored && !consumed) return item;
         return { ...item, quantity: Math.max(0, Number(item.quantity || 0) + restored - consumed) };
       });
-      return { ...current, fuel, reviews: { ...current.reviews, [id]: review } };
+      const reviews = { ...current.reviews, [id]: normalizedReview };
+      (options.memberIds || []).forEach((memberId) => {
+        reviews[memberId] = {
+          ...normalizedReview,
+          linkedReviewId: id,
+          groupReview: true,
+          nutritionItems: [],
+          usedNutrition: false,
+          isEvent: false,
+        };
+      });
+      return { ...current, fuel: adjustedFuel, reviews };
     }),
     setActivities: (activities) => setState((current) => ({ ...current, activities })),
     addActivity: (activity) => setState((current) => ({ ...current, activities: [activity, ...current.activities] })),

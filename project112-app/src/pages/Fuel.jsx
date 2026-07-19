@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useApp } from "../context/AppContext";
 import { Card, PageTitle } from "../components/UI";
 import { lookupOpenFoodFactsProduct, scanBarcodeFromImage, stockUnitForCategory } from "../services/productLookup";
+import { compressImageFile } from "../services/imageTools";
 
 const categories = ["Gel", "Drink Mix", "Elektrolyte", "Riegel", "Recovery", "Kapseln", "Sonstiges"];
 const stockUnits = ["Stück", "Portionen", "Tabletten", "Beutel"];
@@ -44,7 +45,7 @@ export default function Fuel() {
     if (!result.found) {
       setProduct((current) => ({ ...current, barcode: result.barcode }));
       setScanStatus("not-found");
-      setScanMessage("Barcode erkannt, aber das Produkt ist noch nicht in Open Food Facts. Ergänze die Felder kurz manuell.");
+      setScanMessage("Barcode erkannt, aber das Produkt ist nicht im offenen Produktkatalog. Trage es einmal manuell ein – danach steht es im Fuel Lab und in allen Reviews als Vorschlag bereit.");
       return;
     }
     setProduct((current) => ({
@@ -73,14 +74,16 @@ export default function Fuel() {
     if (!file) return;
     setShowForm(true);
     setScanStatus("loading");
-    setScanMessage("Barcode wird aus dem Foto gelesen …");
+    setScanMessage("Foto wird vorbereitet und der Barcode gelesen …");
     try {
+      const imageUrl = await compressImageFile(file, { maxSize: 900, quality: 0.82 });
+      setProduct((current) => ({ ...current, imageUrl }));
       const barcode = await scanBarcodeFromImage(file);
       setProduct((current) => ({ ...current, barcode }));
       await lookupBarcode(barcode);
     } catch (error) {
       setScanStatus("error");
-      setScanMessage(error.message || "Der Barcode konnte nicht gelesen werden.");
+      setScanMessage(`${error.message || "Der Barcode konnte nicht gelesen werden."} Das Foto bleibt erhalten; Produktname und Nährwerte kannst du einmal manuell ergänzen.`);
     }
   }
 
@@ -189,6 +192,7 @@ export default function Fuel() {
       </div>
 
       {scanMessage && <div className={`fuel-scan-status ${scanStatus}`}><b>{scanStatus === "found" ? "Erkannt" : scanStatus === "loading" ? "Einen Moment" : "Hinweis"}</b><span>{scanMessage}</span></div>}
+      {product.imageUrl && <div className="fuel-manual-photo"><img src={product.imageUrl} alt="Ausgewähltes Produkt" /><span>Das Foto wird auch gespeichert, wenn der offene Produktkatalog den Barcode nicht kennt.</span></div>}
 
       <form className="editor-form fuel-editor-form" onSubmit={add}>
         <label className="fuel-barcode-field">Barcode

@@ -91,6 +91,7 @@ export function sourceLabel(activity) {
   if (source === "garmin") return "Garmin";
   if (source === "strava") return "Strava";
   if (source === "intervals") return "Intervals.icu";
+  if (source === "combined") return "Zusammengefasst";
   if (source === "manual") return "Manuell";
   return source.charAt(0).toUpperCase() + source.slice(1);
 }

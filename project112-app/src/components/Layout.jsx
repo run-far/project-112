@@ -16,7 +16,7 @@ export default function Layout() {
   return (
     <div className="shell">
       <aside>
-        <div className="brand"><b>Endurance Intelligence</b><span>Eat your miles.</span><small>v2.2</small></div>
+        <div className="brand"><b>Endurance Intelligence</b><span>Eat your miles.</span><small>v2.3</small></div>
         <nav>{links.map(([to, name, icon]) => <NavLink key={to} to={to} end={to === "/"}><i>{icon}</i>{name}</NavLink>)}</nav>
         <div className="aside-foot">MISSION 01<br /><strong>112 KM</strong></div>
       </aside>
