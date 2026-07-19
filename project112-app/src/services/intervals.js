@@ -30,6 +30,10 @@ export async function fetchIntervalsStatus() {
   return invokeIntervals("status");
 }
 
+export async function fetchIntervalsGear() {
+  return invokeIntervals("gear");
+}
+
 export async function syncIntervalsActivities(after = "2025-01-01") {
   return invokeIntervals("sync", { after });
 }
@@ -98,6 +102,72 @@ function sourceWeather(activity) {
   };
 }
 
+function gearDistanceKm(gear) {
+  const explicitKm = Number(gear?.distance_km ?? gear?.total_distance_km ?? gear?.km);
+  if (Number.isFinite(explicitKm) && explicitKm >= 0) return Number(explicitKm.toFixed(1));
+  const meters = Number(gear?.distance ?? gear?.total_distance ?? 0);
+  if (!Number.isFinite(meters) || meters <= 0) return 0;
+  return Number((meters / 1000).toFixed(1));
+}
+
+function equipmentCategory(gear) {
+  const value = `${gear?.type || ""} ${gear?.name || ""} ${gear?.sport || ""} ${gear?.activity_type || ""}`.toLowerCase();
+  if (/shoe|schuh|run/.test(value)) return "Schuhe";
+  if (/bike|bicycle|rad|ride|cycling/.test(value)) return "Fahrrad";
+  if (/treadmill|laufband/.test(value)) return "Laufband";
+  if (/row|ruder/.test(value)) return "Rudergerät";
+  if (/vest|weste/.test(value)) return "Weste";
+  if (/lamp|light|stirn/.test(value)) return "Stirnlampe";
+  return "Sonstiges";
+}
+
+export function mapIntervalsGear(gear = []) {
+  return (Array.isArray(gear) ? gear : []).map((item) => ({
+    id: `intervals-gear-${item.id}`,
+    intervalsGearId: String(item.id || ""),
+    name: String(item.name || item.model || item.type || "Intervals.icu Ausrüstung"),
+    category: equipmentCategory(item),
+    km: gearDistanceKm(item),
+    uses: Number(item.activity_count ?? item.activities ?? item.count ?? 0) || 0,
+    limit: null,
+    archived: Boolean(item.retired || item.archived),
+    source: "intervals",
+    sourceData: {
+      type: item.type || null,
+      brand: item.brand || null,
+      model: item.model || null,
+    },
+  }));
+}
+
+export function mergeIntervalsGear(existing = [], imported = []) {
+  const result = [...existing];
+  let added = 0;
+  let updated = 0;
+  imported.forEach((item) => {
+    const name = item.name.trim().toLowerCase();
+    const index = result.findIndex((current) =>
+      (item.intervalsGearId && String(current.intervalsGearId || "") === item.intervalsGearId)
+      || (String(current.name || "").trim().toLowerCase() === name && current.category === item.category));
+    if (index === -1) {
+      result.push(item);
+      added += 1;
+      return;
+    }
+    const current = result[index];
+    result[index] = {
+      ...current,
+      intervalsGearId: item.intervalsGearId,
+      source: current.source || "intervals",
+      km: Number(item.km || current.km || 0),
+      uses: Number(item.uses || current.uses || 0),
+      sourceData: { ...(current.sourceData || {}), ...(item.sourceData || {}) },
+    };
+    updated += 1;
+  });
+  return { equipment: result, added, updated };
+}
+
 export function mapIntervalsActivity(activity) {
   const durationSeconds = Number(activity.moving_time || activity.icu_recording_time || activity.elapsed_time || 0);
   const sourceName = String(activity.name || "Intervals.icu Aktivität");
@@ -132,6 +202,8 @@ export function mapIntervalsActivity(activity) {
     atl: activity.icu_atl ?? null,
     perceivedExertion: activity.perceived_exertion ?? activity.icu_rpe ?? null,
     deviceName: activity.device_name || null,
+    gearId: activity.gear?.id ? String(activity.gear.id) : (activity.gear_id ? String(activity.gear_id) : null),
+    gearName: activity.gear?.name || null,
     fileType: activity.file_type || null,
     race: Boolean(activity.race),
     officialEvent: Boolean(activity.race),
@@ -194,6 +266,8 @@ export function mergeIntervalsActivities(existing, imported) {
       coordinates: intervalsActivity.coordinates || current.coordinates || null,
       location: intervalsActivity.location || current.location || "",
       averageCadence: intervalsActivity.averageCadence ?? current.averageCadence,
+      gearId: intervalsActivity.gearId || current.gearId || null,
+      gearName: intervalsActivity.gearName || current.gearName || null,
       trainingLoad: intervalsActivity.trainingLoad ?? current.trainingLoad,
       intensity: intervalsActivity.intensity ?? current.intensity,
       trimp: intervalsActivity.trimp ?? current.trimp,

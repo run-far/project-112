@@ -1,7 +1,7 @@
 {
   "name": "stridehq",
   "private": true,
-  "version": "2.1.0",
+  "version": "2.2.0",
   "homepage": "https://run-far.github.io/project-112",
   "type": "module",
   "scripts": {

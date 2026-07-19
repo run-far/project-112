@@ -210,6 +210,13 @@ Deno.serve(async (request) => {
 
     if (!apiKey) return json({ message: "INTERVALS_API_KEY ist in Supabase noch nicht gesetzt." }, 400);
 
+
+    if (action === "gear") {
+      const gear = await intervalsGet(`/athlete/${athleteId}/gear`, apiKey);
+      if (!Array.isArray(gear)) throw new Error("Intervals.icu hat keine gültige Ausrüstungsliste geliefert.");
+      return json({ gear, syncedAt: new Date().toISOString() });
+    }
+
     if (action === "sync") {
       const after = String(body.after || "2025-01-01");
       const oldestDate = validDate(after) ? after : "2025-01-01";

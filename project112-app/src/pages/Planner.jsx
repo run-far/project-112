@@ -182,6 +182,16 @@ export default function Planner() {
   const currentPlanFingerprint = useMemo(() => planFingerprint(publishablePlan), [publishablePlan]);
   const publishedWeek = config.intervalSync?.[weekKey] || null;
   const planChangedAfterPublish = Boolean(publishedWeek && publishedWeek.fingerprint !== currentPlanFingerprint);
+  const modalVisible = Boolean(editing || missedEditing || planningOpen || overwriteConfirmOpen || publishConfirmOpen);
+
+  useEffect(() => {
+    if (!modalVisible) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [modalVisible]);
 
   useEffect(() => {
     const updates = [...matches.entries()].filter(([id, activity]) => {
@@ -339,7 +349,7 @@ export default function Planner() {
 
     const loadLabel = generated.recoveryWeek ? "Entlastungswoche" : `Aufbauwoche ${generated.cycleWeek}/3`;
     const readinessNotes = generated.readiness.notes.length ? ` ${generated.readiness.notes.join(" ")}` : "";
-    setStatus(`${generated.phase.label} · ${loadLabel} · berechneter Laufrahmen ${generated.target} km. Bereits gelaufen: ${actualRunningKm.toFixed(1)} km.${readinessNotes}`);
+    setStatus(`${generated.phase.label} · ${loadLabel} · berechneter Laufrahmen ${generated.target} km. Bereits gelaufen: ${actualRunningKm.toFixed(1)} km. ${generated.recoveryReason}${readinessNotes}`);
     setPlanningOpen(false);
   }
 
@@ -487,8 +497,8 @@ export default function Planner() {
       <Card className="wide planner-rules">
         <div>
           <p className="eyebrow">Planlogik</p>
-          <h2>Mission → Historie → 3:1-Zyklus → Befinden → Wetter</h2>
-          <p className="muted">Fixtermine werden vor jeder Planung bestätigt. Samstag kann als ORC Track, Alternativlauf oder offene Entweder-oder-Einheit geplant werden. Zwei Stabi-Einheiten und einmal Rudern sind voreingestellt.</p>
+          <h2>Mission → Historie → adaptive Belastung → Befinden → Wetter</h2>
+          <p className="muted">Fixtermine werden vor jeder Planung bestätigt. Der 3:1-Rhythmus dient als Grundgerüst, wird bei Müdigkeit, Schmerzen, Krankheit oder auffälliger Herzfrequenz aber früher entlastet. Samstag kann als ORC Track, Alternativlauf oder offene Entweder-oder-Einheit geplant werden.</p>
         </div>
         <div className="planner-settings">
           <label>Max. Außentemperatur<input type="number" value={config.maxOutdoorTemperature || 29} onChange={(event) => patchConfig({ maxOutdoorTemperature: Number(event.target.value) })} /><span>°C</span></label>
@@ -505,7 +515,7 @@ export default function Planner() {
         </div>
         {coachGuidance.notes.length ? (
           <ul>{coachGuidance.notes.map((note) => <li key={note}>{note}</li>)}</ul>
-        ) : <p className="muted">Umfang und Intensität bleiben innerhalb des missionsbasierten 3:1-Rahmens.</p>}
+        ) : <p className="muted">Umfang und Intensität bleiben innerhalb der missionsbasierten, adaptiven Belastungssteuerung.</p>}
       </Card>
 
       {publishedWeek && (
@@ -572,6 +582,8 @@ export default function Planner() {
                       <div>
                         <span>{item.time} · {matched ? "ERLEDIGT" : isMissed ? "NICHT ERLEDIGT" : item.optional ? "OPTIONAL" : "PFLICHT"}</span>
                         {item.weatherAdjusted && <em>WETTER</em>}
+                        {item.comboSession && <em>KOMBI-TAG</em>}
+                        {item.doubleSession && <em>DOPPELTRAINING</em>}
                         {item.intervalsPublishedAt && <em>INTERVALS</em>}
                         {matched && <em>{String(matched.source || item.actualSource || "Garmin").toUpperCase()}</em>}
                       </div>
@@ -671,7 +683,7 @@ export default function Planner() {
             <button type="button" className="close" onClick={() => setPlanningOpen(false)}>×</button>
             <p className="eyebrow">Intelligente Wochenplanung</p>
             <h2>Wie geht es dir – und wann hast du Zeit?</h2>
-            <p className="muted">Der Kilometerrahmen kommt aus deinem Hauptziel, den letzten Trainingswochen, dem 3:1-Zyklus und diesem Check-in.</p>
+            <p className="muted">Der Kilometerrahmen kommt aus deinem Hauptziel, den letzten Trainingswochen und diesem Check-in. Ein 3:1-Rhythmus ist nur das Grundgerüst; Erholungssignale können jederzeit eine frühere Entlastung auslösen.</p>
 
             {(reasonCounts.fatigue > 0 || reasonCounts.pain > 0 || reasonCounts.illness > 0) && (
               <div className="planner-history-alert">
@@ -737,7 +749,7 @@ export default function Planner() {
             <div className="planner-day-picker"><strong>An welchen Tagen kannst du laufen?</strong><div>{plannerDays.map((day) => <button type="button" className={planningDraft.runDays.includes(day) ? "selected" : ""} onClick={() => toggleDay("runDays", day)} key={`run-${day}`}>{day.slice(0, 2)}</button>)}</div></div>
             <div className="planner-day-picker"><strong>Stabi an welchen Tagen?</strong><div>{plannerDays.map((day) => <button type="button" className={planningDraft.stabiDays.includes(day) ? "selected" : ""} onClick={() => toggleDay("stabiDays", day)} key={`stabi-${day}`}>{day.slice(0, 2)}</button>)}</div></div>
             <div className="planner-day-picker"><strong>Rudern an welchen Tagen?</strong><div>{plannerDays.map((day) => <button type="button" className={planningDraft.rowingDays.includes(day) ? "selected" : ""} onClick={() => toggleDay("rowingDays", day)} key={`row-${day}`}>{day.slice(0, 2)}</button>)}</div></div>
-            <div className="planner-day-picker"><strong>Welche Tage dürfen Doppeltraining enthalten?</strong><div>{plannerDays.map((day) => <button type="button" className={planningDraft.doubleTrainingDays.includes(day) ? "selected" : ""} onClick={() => toggleDay("doubleTrainingDays", day)} key={`double-${day}`}>{day.slice(0, 2)}</button>)}</div><small>Die Engine nutzt Doppeltraining nur, wenn der berechnete Umfang es nötig macht.</small></div>
+            <div className="planner-day-picker"><strong>An welchen Tagen ist echtes Doppeltraining erlaubt?</strong><div>{plannerDays.map((day) => <button type="button" className={planningDraft.doubleTrainingDays.includes(day) ? "selected" : ""} onClick={() => toggleDay("doubleTrainingDays", day)} key={`double-${day}`}>{day.slice(0, 2)}</button>)}</div><small>Gemeint sind Fußball + Lauf, Rudern + Lauf oder zwei Ausdauereinheiten. Stabi/Mobility + Lauf ist nur ein Kombi-Tag und braucht keine Freigabe.</small></div>
             <label>Zusätzliche Notiz<textarea value={planningDraft.checkin.notes} onChange={(event) => updateCheckin("notes", event.target.value)} placeholder="Reise, wenig Zeit, besondere Termine …" /></label>
             <button className="primary" type="submit">Plan berechnen</button>
           </form>

@@ -281,37 +281,56 @@ function item(weekStart, dayIndex, values) {
 }
 
 function addStrengthSessions(plan, weekStart, config, readiness) {
-  const doubleDays = new Set(readiness.avoidDoubleStrength ? [] : (config.doubleTrainingDays || []));
+  const trueDoubleDays = new Set(config.doubleTrainingDays || []);
   const strengthFactor = Number(readiness.strengthFactor || 1);
   const stabiDays = (config.stabiDays?.length ? config.stabiDays : ["Dienstag", "Donnerstag"]).slice(0, Number(config.stabiCount ?? 2));
   const rowingDays = (config.rowingDays?.length ? config.rowingDays : ["Freitag"]).slice(0, Number(config.rowingCount ?? 1));
 
+  function sessionsOnDay(day) {
+    const dayIndex = DAY_INDEX[day];
+    if (dayIndex === undefined) return [];
+    const date = isoDate(dateForDay(weekStart, dayIndex));
+    return plan.filter((entry) => entry.date === date && entry.type !== "Ruhetag");
+  }
+
   stabiDays.forEach((day, index) => {
     if (DAY_INDEX[day] === undefined) return;
+    const paired = sessionsOnDay(day).length > 0;
     plan.push(item(weekStart, DAY_INDEX[day], {
-      time: doubleDays.has(day) ? "07:00" : "18:30",
+      time: paired ? "07:00" : "18:30",
       title: strengthFactor < 0.8 ? "Leichte Mobilität" : "Stabi & Mobilität",
       type: "Stabi",
       distance: 0,
       duration: Math.max(12, Math.round(Number(config.stabiDuration || 25) * strengthFactor)),
       notes: strengthFactor < 0.8 ? "Review-Anpassung: nur Mobilität, Aktivierung und saubere Bewegung." : "Fester Bestandteil: Rumpf, Rücken, Hüfte und Füße.",
       optional: strengthFactor < 0.65,
-      doubleSession: doubleDays.has(day),
+      comboSession: paired,
+      doubleSession: false,
       sequence: index + 1,
     }));
   });
 
   rowingDays.forEach((day, index) => {
     if (DAY_INDEX[day] === undefined) return;
+    const paired = sessionsOnDay(day).length > 0;
+    const trueDouble = paired && trueDoubleDays.has(day) && !readiness.avoidDoubleStrength;
+    if (paired && !trueDouble) {
+      const fallback = ["Donnerstag", "Freitag", "Dienstag", "Sonntag", "Samstag"]
+        .find((candidate) => DAY_INDEX[candidate] !== undefined && sessionsOnDay(candidate).length === 0);
+      if (fallback) day = fallback;
+    }
+    const finalPaired = sessionsOnDay(day).length > 0;
+    const finalDouble = finalPaired && trueDoubleDays.has(day) && !readiness.avoidDoubleStrength;
     plan.push(item(weekStart, DAY_INDEX[day], {
-      time: doubleDays.has(day) ? "07:00" : "18:30",
+      time: finalDouble ? "07:00" : "18:30",
       title: strengthFactor < 0.8 ? "Rudern sehr locker" : "Rudern locker",
       type: "Rudern",
       distance: 0,
       duration: Math.max(15, Math.round(Number(config.rowingDuration || 40) * strengthFactor)),
       notes: strengthFactor < 0.8 ? "Review-Anpassung: niedriger Widerstand, kein Druck auf Rücken und Schultern." : "Ruhige Grundlageneinheit ohne zusätzliche Stoßbelastung.",
       optional: strengthFactor < 0.65,
-      doubleSession: doubleDays.has(day),
+      comboSession: false,
+      doubleSession: finalDouble,
       sequence: index + 1,
     }));
   });
@@ -320,13 +339,21 @@ function addStrengthSessions(plan, weekStart, config, readiness) {
 function distributeEasyKilometers(plan, weekStart, target, fixedKm, config, phase, readiness, cycle) {
   const allowed = new Set(config.runDays?.length ? config.runDays : ["Dienstag", "Mittwoch", "Freitag", "Samstag", "Sonntag"]);
   const fixedAppointments = config.fixedAppointments || {};
+  const trueDoubleDays = new Set(config.doubleTrainingDays || []);
+
+  function hasEnduranceSession(day) {
+    const date = isoDate(dateForDay(weekStart, DAY_INDEX[day]));
+    return plan.some((entry) => entry.date === date && !["Stabi", "Ruhetag"].includes(entry.type));
+  }
+
   const candidates = [
     "Dienstag",
     "Freitag",
     "Donnerstag",
     ...(!fixedAppointments.orcRun ? ["Mittwoch"] : []),
-    ...(!fixedAppointments.football ? ["Montag"] : []),
-  ].filter((day) => allowed.has(day));
+    ...(!fixedAppointments.football || trueDoubleDays.has("Montag") ? ["Montag"] : []),
+  ].filter((day) => allowed.has(day) && (!hasEnduranceSession(day) || trueDoubleDays.has(day)));
+
   const remaining = Math.max(0, target - fixedKm);
   const desiredSessions = target >= 75 ? 3 : remaining > 12 ? 2 : 1;
   const sessionCount = Math.min(desiredSessions, candidates.length);
@@ -335,18 +362,22 @@ function distributeEasyKilometers(plan, weekStart, target, fixedKm, config, phas
   const weights = sessionCount === 1 ? [1] : sessionCount === 2 ? [0.55, 0.45] : [0.4, 0.34, 0.26];
   candidates.slice(0, sessionCount).forEach((day, index) => {
     const distance = Math.max(4, Math.round(remaining * weights[index]));
-    const quality = day === "Freitag" && readiness.hardAllowed && ["build", "specific"].includes(phase.key) && cycle >= 2 && target >= 45;
+    const paired = hasEnduranceSession(day);
+    const quality = day === "Freitag" && !paired && readiness.hardAllowed && ["build", "specific"].includes(phase.key) && cycle >= 2 && target >= 45;
     plan.push(item(weekStart, DAY_INDEX[day], {
-      time: day === "Montag" ? "07:00" : "18:00",
+      time: paired ? "07:00" : "18:00",
       title: quality ? `${distance} km mit Schwellenblock` : `${distance} km locker`,
       type: quality ? "Schwellenlauf" : "Easy Run",
       distance,
       duration: Math.round(distance * 6.4),
       notes: quality
-        ? (fixedAppointments.football ? "Nur kontrolliert: Einlaufen, kurzer Schwellenblock, auslaufen. Fußball zählt bereits als intensive Belastung." : "Nur kontrolliert: Einlaufen, kurzer Schwellenblock und auslaufen.")
-        : "Locker laufen, keine Pace erzwingen.",
+        ? "Nur kontrolliert: Einlaufen, kurzer Schwellenblock und auslaufen."
+        : paired
+          ? "Echter Doppeltrainingstag: sehr locker laufen und ausreichend Abstand zur zweiten Einheit lassen."
+          : "Locker laufen, keine Pace erzwingen.",
       optional: index === sessionCount - 1 && target >= 55,
-      doubleSession: day === "Montag" || (config.doubleTrainingDays || []).includes(day),
+      doubleSession: paired,
+      comboSession: false,
     }));
   });
 }
@@ -373,12 +404,19 @@ export function generateWeekPlan({
   const daysLeft = daysToMission(mission, weekStart);
   const phase = trainingPhase(daysLeft);
   const cycle = cycleWeek(mission, weekStart);
-  const recoveryWeek = cycle === 4;
+  const scheduledRecoveryWeek = cycle === 4;
   const missedSignals = recentMissedSignals(planHistory, historyCutoff);
   const checkinReadiness = readinessDecision(config, missedSignals);
   const reviewReference = weekStart > today ? weekStart : new Date(today.getTime() + DAY_MS);
   const reviewReadiness = reviewGuidance(activities, reviews, reviewReference);
   const readiness = combineReadiness(checkinReadiness, reviewReadiness);
+  const earlyRecoveryWeek = readiness.factor < 0.86 || !readiness.longRunAllowed || ["unchanged", "worse"].includes(config.checkin?.pain) || ["recovering", "symptoms"].includes(config.checkin?.illness);
+  const recoveryWeek = scheduledRecoveryWeek || earlyRecoveryWeek;
+  const recoveryReason = scheduledRecoveryWeek
+    ? "Geplante Entlastung nach dem 3:1-Grundrhythmus."
+    : earlyRecoveryWeek
+      ? "Entlastung wurde wegen Befinden, Reviews oder ausgefallener Einheiten vorgezogen."
+      : "Belastungswoche innerhalb des adaptiven Aufbauzyklus.";
   const fixedAppointments = {
     football: config.fixedAppointments?.football !== false,
     orcRun: config.fixedAppointments?.orcRun !== false,
@@ -386,7 +424,7 @@ export function generateWeekPlan({
   };
 
   const base = recentAverage || Math.max(25, Math.min(45, Number(mission?.targetKm || 50) * 0.4));
-  const cycleFactor = recoveryWeek ? 0.75 : [1, 1.04, 1.08][cycle - 1] || 1;
+  const cycleFactor = recoveryWeek ? (scheduledRecoveryWeek ? 0.75 : 0.82) : [1, 1.04, 1.08][cycle - 1] || 1;
   let target = base * cycleFactor * phase.factor * readiness.factor;
 
   if (!recoveryWeek && phase.key !== "taper" && lastWeek > 0) target = Math.min(target, lastWeek * 1.1);
@@ -579,6 +617,9 @@ export function generateWeekPlan({
     phase,
     cycleWeek: cycle,
     recoveryWeek,
+    scheduledRecoveryWeek,
+    earlyRecoveryWeek,
+    recoveryReason,
     readiness,
     daysLeft,
     history: history.map((week) => ({ start: isoDate(week.start), km: Math.round(week.km * 10) / 10 })),
