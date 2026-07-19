@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../context/AppContext";
 import { Score } from "./UI";
 import { hydration } from "../services/insights";
 import { eventTitleFor, isOfficialEvent } from "../services/achievements";
 import { isRoadCyclingActivity, reviewKind, reviewKindLabel } from "../services/activityUtils";
+import { fetchActivityWeather } from "../services/activityWeather";
 
 const emptyNutritionItem = () => ({
   id: crypto.randomUUID(),
@@ -13,6 +14,7 @@ const emptyNutritionItem = () => ({
   manufacturer: "",
   quantity: "1",
   unit: "Stück",
+  carbohydratesPerUnit: "",
   affectsInventory: false,
 });
 
@@ -27,7 +29,7 @@ function ZeroScore({ label, value, onChange, help }) {
 }
 
 export default function ReviewModal({ activity, onClose }) {
-  const { state, upsertReview } = useApp();
+  const { state, upsertReview, updateActivity } = useApp();
   const [saveError, setSaveError] = useState("");
   const kind = reviewKind(activity);
   const old = state.reviews[activity.id] || {};
@@ -37,8 +39,20 @@ export default function ReviewModal({ activity, onClose }) {
   const oldNutrition = (Array.isArray(old.nutritionItems) ? old.nutritionItems : []).map((item) => {
     if (typeof item.affectsInventory === "boolean") return item;
     const fuelItem = state.fuel.find((fuel) => fuel.id === item.fuelItemId);
-    return { ...item, affectsInventory: Boolean(item.fuelItemId && inventoryApplies(fuelItem)) };
+    return {
+      ...item,
+      carbohydratesPerUnit: item.carbohydratesPerUnit ?? fuelItem?.carbs ?? "",
+      affectsInventory: Boolean(item.fuelItemId && inventoryApplies(fuelItem)),
+    };
   });
+  const [weather, setWeather] = useState(() => activity.weather || (activity.temperature != null ? {
+    temperature: Number(activity.temperature),
+    source: activity.source === "intervals" ? "Intervals.icu" : activity.source || "Aktivitätsdatei",
+  } : null));
+  const [weatherStatus, setWeatherStatus] = useState(() => activity.coordinates && !(activity.weather?.condition && activity.weather?.windSpeed != null)
+    ? "Wetter zum Aktivitätszeitpunkt wird geladen …"
+    : "");
+
   const [review, setReview] = useState({
     reviewType: old.reviewType || kind,
     legs: old.legs ?? 7,
@@ -61,6 +75,44 @@ export default function ReviewModal({ activity, onClose }) {
     eventTitle: old.eventTitle || (detectedEvent ? eventTitleFor(activity, old) : ""),
     eventCategory: old.eventCategory || "Offizieller Lauf",
   });
+
+  useEffect(() => {
+    if (weather?.condition && weather?.windSpeed != null) return undefined;
+    if (!activity.coordinates) return undefined;
+    let cancelled = false;
+    fetchActivityWeather(activity)
+      .then((result) => {
+        if (cancelled) return;
+        setWeather(result);
+        setWeatherStatus("");
+        updateActivity(activity.id, { weather: result, temperature: result.temperature });
+      })
+      .catch((error) => {
+        if (!cancelled) setWeatherStatus(error instanceof Error ? error.message : String(error));
+      });
+    return () => { cancelled = true; };
+  // Fetch only once for the selected activity.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activity.id]);
+
+  const nutritionSummary = useMemo(() => {
+    const items = review.usedNutrition ? review.nutritionItems : [];
+    const totalCarbs = items.reduce((sum, item) => sum + (Number(item.quantity || 0) * Number(item.carbohydratesPerUnit || 0)), 0);
+    const durationHours = Number(activity.durationSeconds || 0) > 0
+      ? Number(activity.durationSeconds) / 3600
+      : Number(activity.duration || 0) / 60;
+    const carbsPerHour = durationHours > 0 ? totalCarbs / durationHours : 0;
+    let targetLow = 0;
+    let targetHigh = 30;
+    let label = "Bei kurzen Einheiten ist Verpflegung meist optional.";
+    if (durationHours >= 1 && durationHours < 2.5) {
+      targetLow = 30; targetHigh = 60; label = "Orientierung für längere Ausdauerbelastungen: 30–60 g/h.";
+    } else if (durationHours >= 2.5) {
+      targetLow = 60; targetHigh = 90; label = "Orientierung für lange Ausdauer- und Ultraeinheiten: 60–90 g/h, individuell trainieren.";
+    }
+    const status = !totalCarbs ? "none" : carbsPerHour < targetLow ? "low" : carbsPerHour > targetHigh ? "high" : "good";
+    return { totalCarbs, durationHours, carbsPerHour, targetLow, targetHigh, label, status };
+  }, [activity.duration, activity.durationSeconds, review.nutritionItems, review.usedNutrition]);
 
   if (!kind) return null;
 
@@ -115,6 +167,7 @@ export default function ReviewModal({ activity, onClose }) {
         product: selected.name || "",
         unit: selected.stockUnit || "Stück",
         quantity: item.quantity || "1",
+        carbohydratesPerUnit: selected.carbs ?? item.carbohydratesPerUnit ?? "",
         affectsInventory: inventoryApplies(selected),
       } : {
         ...item,
@@ -163,6 +216,12 @@ export default function ReviewModal({ activity, onClose }) {
       nutritionItems: nextNutrition,
       usedNutrition: kind === "endurance" && review.usedNutrition,
       isEvent: kind === "endurance" && review.isEvent,
+      nutritionCarbsTotal: kind === "endurance" ? Number(nutritionSummary.totalCarbs.toFixed(1)) : 0,
+      carbohydratesPerHour: kind === "endurance" ? Number(nutritionSummary.carbsPerHour.toFixed(1)) : 0,
+      carbohydrateTargetLow: kind === "endurance" ? nutritionSummary.targetLow : 0,
+      carbohydrateTargetHigh: kind === "endurance" ? nutritionSummary.targetHigh : 0,
+      carbohydrateStatus: kind === "endurance" ? nutritionSummary.status : null,
+      weather: weather || old.weather || null,
       updatedAt: new Date().toISOString(),
     });
     onClose();
@@ -191,6 +250,24 @@ export default function ReviewModal({ activity, onClose }) {
               <label>Gewicht vorher (kg)<input type="number" step="0.1" value={review.weightBefore} onChange={(event) => set("weightBefore", event.target.value)} /></label>
               <label>Gewicht nachher (kg)<input type="number" step="0.1" value={review.weightAfter} onChange={(event) => set("weightAfter", event.target.value)} /></label>
             </div>
+
+            <section className={`review-feature-box activity-weather-box ${weather ? "active" : ""}`}>
+              <div className="activity-weather-heading">
+                <div><b>Wetter bei der Einheit</b><small>Werte am Startort und möglichst nah an der Startzeit.</small></div>
+                {weather?.source && <em>{weather.source}</em>}
+              </div>
+              {weather ? (
+                <div className="activity-weather-grid">
+                  <span><small>Temperatur</small><strong>{Number(weather.temperature).toFixed(0)} °C</strong></span>
+                  <span><small>Gefühlt</small><strong>{weather.feelsLike != null ? `${Number(weather.feelsLike).toFixed(0)} °C` : "–"}</strong></span>
+                  <span><small>Wetter</small><strong>{weather.condition || "–"}</strong></span>
+                  <span><small>Wind</small><strong>{weather.windSpeed != null ? `${Number(weather.windSpeed).toFixed(0)} km/h` : "–"}</strong></span>
+                  <span><small>Böen</small><strong>{weather.windGusts != null ? `${Number(weather.windGusts).toFixed(0)} km/h` : "–"}</strong></span>
+                  <span><small>Niederschlag</small><strong>{weather.precipitation != null ? `${Number(weather.precipitation).toFixed(1)} mm` : "–"}</strong></span>
+                </div>
+              ) : <p className="muted">{weatherStatus || "Keine Wetter- oder Standortdaten in der Aktivität vorhanden."}</p>}
+              {weather && weatherStatus && <p className="muted">{weatherStatus}</p>}
+            </section>
 
             {activity.heartRateZones?.zones?.length > 0 && (
               <section className="review-feature-box heart-rate-review-box active">
@@ -235,12 +312,19 @@ export default function ReviewModal({ activity, onClose }) {
                         </label>
                         <label>Hersteller<input value={item.manufacturer} onChange={(event) => updateNutritionItem(item.id, "manufacturer", event.target.value)} placeholder="z. B. Maurten" /></label>
                         <label>Produkt<input value={item.product} onChange={(event) => updateNutritionItem(item.id, "product", event.target.value)} placeholder="z. B. Gel 100" /></label>
+                        <label>Carbs pro Einheit (g)<input type="number" min="0" step="0.1" value={item.carbohydratesPerUnit ?? ""} onChange={(event) => updateNutritionItem(item.id, "carbohydratesPerUnit", event.target.value)} /></label>
                         <label>Menge<input type="number" min="0" step="0.1" value={item.quantity} onChange={(event) => updateNutritionItem(item.id, "quantity", event.target.value)} /></label>
                         <label>Einheit<select value={item.unit} onChange={(event) => updateNutritionItem(item.id, "unit", event.target.value)} disabled={Boolean(item.fuelItemId)}><option>Stück</option><option>Portionen</option><option>ml</option><option>g</option><option>Tabletten</option><option>Beutel</option></select></label>
                       </div>
                     </div>
                   ))}
                   <button type="button" className="secondary add-review-item" onClick={() => setReview((current) => ({ ...current, nutritionItems: [...current.nutritionItems, emptyNutritionItem()] }))}>+ Weitere Verpflegung</button>
+                  <div className={`carb-rate-box ${nutritionSummary.status}`}>
+                    <div><span>Kohlenhydrate gesamt</span><strong>{nutritionSummary.totalCarbs.toFixed(0)} g</strong></div>
+                    <div><span>Pro Stunde</span><strong>{nutritionSummary.durationHours > 0 ? `${nutritionSummary.carbsPerHour.toFixed(0)} g/h` : "–"}</strong></div>
+                    <div><span>Orientierung</span><strong>{nutritionSummary.targetLow}–{nutritionSummary.targetHigh} g/h</strong></div>
+                    <p>{nutritionSummary.status === "low" ? "Unter dem Orientierungsbereich – bei langen Läufen frühere oder größere Zufuhr testen." : nutritionSummary.status === "high" ? "Über dem Orientierungsbereich – nur beibehalten, wenn Magen und Verträglichkeit stabil sind." : nutritionSummary.status === "good" ? "Liegt im Orientierungsbereich. Verträglichkeit und Energie weiter beobachten." : nutritionSummary.label}</p>
+                  </div>
                 </div>
               )}
             </section>

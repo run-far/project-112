@@ -33,6 +33,15 @@ function asIsoLocal(timestamp) {
   return new Date(value).toISOString().replace("Z", "");
 }
 
+
+function normalizeTemperature(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  if (Math.abs(number) > 1000) return round(number / 100, 1);
+  if (Math.abs(number) > 100) return round(number / 10, 1);
+  return round(number, 1);
+}
+
 function normalizeType(activity) {
   const raw = String(activity.activityType || activity.sportType || "other").toLowerCase();
   const name = String(activity.name || "").toLowerCase();
@@ -87,6 +96,8 @@ export function mapGarminActivity(activity) {
     trainingLoad: activity.activityTrainingLoad ? round(activity.activityTrainingLoad, 1) : null,
     vo2Max: activity.vO2MaxValue ? round(activity.vO2MaxValue, 1) : null,
     location: activity.locationName || "",
+    temperature: normalizeTemperature(activity.avgTemperature ?? activity.averageTemperature ?? activity.avgTemp),
+    weather: null,
     coordinates: activity.startLatitude && activity.startLongitude
       ? { lat: Number(activity.startLatitude), lon: Number(activity.startLongitude) }
       : null,
@@ -206,6 +217,8 @@ export function mergeGarminActivities(existing, imported) {
       trainingLoad: current.trainingLoad ?? garminActivity.trainingLoad,
       vo2Max: current.vo2Max ?? garminActivity.vo2Max,
       location: current.location || garminActivity.location,
+      temperature: current.temperature ?? garminActivity.temperature,
+      weather: current.weather || garminActivity.weather || null,
       coordinates: current.coordinates || garminActivity.coordinates,
       sources: Array.from(new Set([...(current.sources || [current.source].filter(Boolean)), "garmin"])),
     };

@@ -48,6 +48,7 @@ export const defaultState = {
     rowingDays: ["Freitag"],
     runDays: ["Dienstag", "Mittwoch", "Freitag", "Samstag", "Sonntag"],
     doubleTrainingDays: ["Dienstag", "Freitag"],
+    fixedAppointments: { football: true, orcRun: true, saturdayMode: "open" },
     maxOutdoorTemperature: 29,
     maxWindGust: 55,
     maxLongRun: 38,

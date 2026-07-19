@@ -27,6 +27,7 @@ export default function Mission() {
   const { state, setState } = useApp();
   const [draft, setDraft] = useState(emptyEvent);
   const [editingId, setEditingId] = useState(null);
+  const [showEditor, setShowEditor] = useState(false);
   const [forecasts, setForecasts] = useState({});
   const [showArchived, setShowArchived] = useState(false);
   const [placeSuggestions, setPlaceSuggestions] = useState([]);
@@ -56,6 +57,8 @@ export default function Mission() {
   }, [state.mission, preparationStartDate]);
 
   const activeMilestones = milestones.filter((item) => !item.archived);
+  const mainTarget = activeMilestones.find((item) => item.isMainTarget) || activeMilestones[0];
+  const upcomingMilestones = activeMilestones.filter((item) => item.id !== mainTarget?.id);
   const archivedMilestones = milestones.filter((item) => item.archived);
 
   function change(event) {
@@ -141,6 +144,7 @@ export default function Mission() {
 
     setDraft(emptyEvent);
     setEditingId(null);
+    setShowEditor(false);
   }
 
   function edit(item) {
@@ -154,6 +158,7 @@ export default function Mission() {
       preparationStartDate: item.preparationStartDate ?? "",
       isMainTarget: Boolean(item.isMainTarget),
     });
+    setShowEditor(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -249,19 +254,38 @@ export default function Mission() {
 
   return (
     <>
-      <PageTitle eyebrow="Mission Control" title={state.mission.name} />
-      <div className="grid">
-        <Card className="hero wide">
-          <div className="hero-stats">
-            <Metric label="Ziel" value={`${state.mission.targetKm || 0} km`} />
-            <Metric label="Countdown" value={`${daysUntil(state.mission.date)} Tage`} sub={fmtDate(state.mission.date)} />
-            <Metric label="Fulda-Vorbereitung" value={`${preparationKm.toFixed(0)} km`} sub={`Laufen seit ${fmtDate(preparationStartDate)}`} />
-            <Metric label="Laufeinheiten" value={preparationRuns.length} />
-          </div>
-        </Card>
+      <PageTitle eyebrow="Mission Control" title="Mission Control">
+        <button className="mission-add-button" onClick={() => {
+          setEditingId(null);
+          setDraft(emptyEvent);
+          setShowEditor((value) => !value);
+        }}>+ Meilenstein / Event</button>
+      </PageTitle>
+      <div className="grid mission-grid">
+        {mainTarget && (
+          <Card className="hero wide mission-main-hero">
+            <div className="mission-main-heading">
+              <div>
+                <p className="eyebrow">Hauptziel</p>
+                <h2>{mainTarget.name}</h2>
+                <p className="mission-location">📍 {mainTarget.location || "Noch kein Ort hinterlegt"}</p>
+              </div>
+              <button onClick={() => edit(mainTarget)}>Hauptziel bearbeiten</button>
+            </div>
+            <div className="hero-stats mission-hero-stats">
+              <Metric label="Ziel" value={`${mainTarget.targetKm || state.mission.targetKm || 0} km`} />
+              <Metric label="Countdown" value={`${daysUntil(mainTarget.date)} Tage`} sub={fmtDate(mainTarget.date)} />
+              <Metric label="Fulda-Vorbereitung" value={`${preparationKm.toFixed(0)} km`} sub={`seit ${fmtDate(preparationStartDate)}`} />
+              <Metric label="Laufeinheiten" value={preparationRuns.length} sub="seit Hermannslauf" />
+            </div>
+          </Card>
+        )}
 
-        <Card className="wide">
-          <p className="eyebrow">Meilensteine & Events</p>
+        {showEditor && <Card className="wide mission-editor-card">
+          <div className="card-heading-row">
+            <div><p className="eyebrow">Meilenstein & Event</p><h2>{editingId ? "Eintrag bearbeiten" : "Neuen Eintrag hinzufügen"}</h2></div>
+            <button type="button" onClick={() => { setShowEditor(false); setEditingId(null); setDraft(emptyEvent); }}>Schließen</button>
+          </div>
           <form className="editor-form mission-editor" onSubmit={save}>
             <label>Event<input name="name" value={draft.name} onChange={change} placeholder="Backyard Ultra" required /></label>
             <label>Datum<input name="date" type="date" value={draft.date} onChange={change} required /></label>
@@ -275,11 +299,14 @@ export default function Mission() {
             {draft.isMainTarget && <label>Vorbereitung ab<input name="preparationStartDate" type="date" value={draft.preparationStartDate} onChange={change} /></label>}
             <label className="checkbox-label"><input name="isMainTarget" type="checkbox" checked={draft.isMainTarget} onChange={change} /> Als Hauptziel markieren</label>
             <button className="primary" type="submit">{editingId ? "Änderung speichern" : "Event hinzufügen"}</button>
-            {editingId && <button type="button" onClick={() => { setEditingId(null); setDraft(emptyEvent); }}>Abbrechen</button>}
+            {editingId && <button type="button" onClick={() => { setEditingId(null); setDraft(emptyEvent); setShowEditor(false); }}>Abbrechen</button>}
           </form>
-        </Card>
+        </Card>}
 
-        {activeMilestones.map((item) => eventCard(item))}
+        {upcomingMilestones.length > 0 && <Card className="wide mission-upcoming-section">
+          <div className="card-heading-row"><div><p className="eyebrow">Nächste Meilensteine</p><h2>Auf dem Weg nach Fulda</h2></div><span className="achievement-count">{upcomingMilestones.length}</span></div>
+          <div className="mission-event-grid">{upcomingMilestones.map((item) => eventCard(item))}</div>
+        </Card>}
 
         <Card className="wide">
           <div className="card-heading-row"><div><p className="eyebrow">Achievements</p><h2>Absolvierte offizielle Läufe</h2></div><span className="achievement-count">{achievements.length}</span></div>

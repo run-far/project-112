@@ -150,7 +150,7 @@ export default function Planner() {
 
   const weekStart = useMemo(() => startOfWeek(new Date(), offsetWeeks), [offsetWeeks]);
   const weekEnd = dateForDay(weekStart, 6);
-  const canonicalActivities = useMemo(() => preferredActivities(state.activities), [state.activities]);
+  const canonicalActivities = useMemo(() => preferredActivities(state.activities, { hideStrava: Boolean(state.intervals?.connected) }), [state.activities, state.intervals?.connected]);
   const activityById = useMemo(() => new Map(canonicalActivities.map((activity) => [activity.id, activity])), [canonicalActivities]);
   const weekPlan = useMemo(() => state.plan.filter((item) => {
     const value = item.date || "";
@@ -231,6 +231,11 @@ export default function Planner() {
       rowingDays: config.rowingDays?.length ? config.rowingDays : ["Freitag"],
       runDays: config.runDays?.length ? config.runDays : ["Dienstag", "Mittwoch", "Freitag", "Samstag", "Sonntag"],
       doubleTrainingDays: config.doubleTrainingDays || ["Dienstag", "Freitag"],
+      fixedAppointments: {
+        football: config.fixedAppointments?.football !== false,
+        orcRun: config.fixedAppointments?.orcRun !== false,
+        saturdayMode: config.fixedAppointments?.saturdayMode || "open",
+      },
       checkin: {
         energy: Number(lastCheckin.energy || 4),
         fatigue: reasonCounts.fatigue ? "unchanged" : "none",
@@ -256,6 +261,26 @@ export default function Planner() {
 
   function updateCheckin(field, value) {
     setPlanningDraft((current) => ({ ...current, checkin: { ...current.checkin, [field]: value } }));
+  }
+
+  function updateFixedAppointment(field, value) {
+    setPlanningDraft((current) => ({
+      ...current,
+      fixedAppointments: { ...current.fixedAppointments, [field]: value },
+    }));
+  }
+
+  function resolveSaturdayChoice(item, choice) {
+    const selected = item.choiceOptions?.[choice];
+    if (!selected) return;
+    updateWorkout(item.id, {
+      ...selected,
+      choicePending: false,
+      selectedChoice: choice,
+      notes: choice === "orc"
+        ? "Freitagsentscheidung: ORC Track findet statt."
+        : "Freitagsentscheidung: lockerer Alternativlauf statt ORC Track.",
+    });
   }
 
   async function generate(overrideConfig = null) {
@@ -463,7 +488,7 @@ export default function Planner() {
         <div>
           <p className="eyebrow">Planlogik</p>
           <h2>Mission → Historie → 3:1-Zyklus → Befinden → Wetter</h2>
-          <p className="muted">Montag Fußball, Mittwoch ORC Run und Samstag ORC Track optional. Zwei Stabi-Einheiten und einmal Rudern sind ab nächster Woche voreingestellt. Den Kilometerrahmen berechnet Endurance Intelligence selbst.</p>
+          <p className="muted">Fixtermine werden vor jeder Planung bestätigt. Samstag kann als ORC Track, Alternativlauf oder offene Entweder-oder-Einheit geplant werden. Zwei Stabi-Einheiten und einmal Rudern sind voreingestellt.</p>
         </div>
         <div className="planner-settings">
           <label>Max. Außentemperatur<input type="number" value={config.maxOutdoorTemperature || 29} onChange={(event) => patchConfig({ maxOutdoorTemperature: Number(event.target.value) })} /><span>°C</span></label>
@@ -555,6 +580,12 @@ export default function Planner() {
                       {matched && <small>{matched.name || item.actualTitle}</small>}
                       {item.missedReason && <small>Grund: {item.missedReason}{item.missedNote ? ` · ${item.missedNote}` : ""}</small>}
                       {item.notes && <small>{item.notes}</small>}
+                      {item.choicePending && item.choiceOptions && (
+                        <div className="planner-choice-actions">
+                          <button type="button" onClick={() => resolveSaturdayChoice(item, "orc")}>📍 ORC Track</button>
+                          <button type="button" onClick={() => resolveSaturdayChoice(item, "alternative")}>🟢 Alternativlauf</button>
+                        </div>
+                      )}
                     </div>
                     <div className="planner-actions">
                       {isMissed && <button className="danger" onClick={() => openMissed(item)}>Grund angeben</button>}
@@ -579,6 +610,7 @@ export default function Planner() {
             <p><strong>{publishablePlan.length}</strong> zukünftige Einheit{publishablePlan.length === 1 ? "" : "en"} werden für {dayFormatter.format(weekStart)} bis {dayFormatter.format(weekEnd)} veröffentlicht.</p>
             <div className="planner-protection-list">
               <span>✓ Lauf- und Radeinheiten werden als strukturierte Workouts angelegt</span>
+              <span>✓ Eine noch offene Samstagswahl bleibt zunächst als Kalendereintrag und wird nach deiner Entscheidung aktualisiert</span>
               <span>✓ Fußball, Stabi, Mobility und Rudern bleiben reine Kalendereinträge</span>
               <span>✓ Erneutes Senden aktualisiert bestehende Einträge statt Duplikate anzulegen</span>
               <span>✓ Entfernte Einheiten werden auch aus dieser Intervals-Woche entfernt</span>
@@ -649,6 +681,30 @@ export default function Planner() {
                 {reasonCounts.illness > 0 && <span>{reasonCounts.illness} × Krankheit: Fühlst du dich wieder zu 100 % fit?</span>}
               </div>
             )}
+
+            <section className="planner-fixed-appointments">
+              <div>
+                <p className="eyebrow">Fixtermine dieser Woche</p>
+                <h3>Welche Termine stehen wirklich?</h3>
+                <p className="muted">Nicht bestätigte Termine werden durch passende Trainingseinheiten ersetzt.</p>
+              </div>
+              <label className="planner-fixed-toggle">
+                <input type="checkbox" checked={planningDraft.fixedAppointments.football} onChange={(event) => updateFixedAppointment("football", event.target.checked)} />
+                <span><b>Montag · Fußball</b><small>Intensive Belastung einplanen</small></span>
+              </label>
+              <label className="planner-fixed-toggle">
+                <input type="checkbox" checked={planningDraft.fixedAppointments.orcRun} onChange={(event) => updateFixedAppointment("orcRun", event.target.checked)} />
+                <span><b>Mittwoch · ORC Run</b><small>Gruppenlauf als Fixtermin</small></span>
+              </label>
+              <label>Samstag
+                <select value={planningDraft.fixedAppointments.saturdayMode} onChange={(event) => updateFixedAppointment("saturdayMode", event.target.value)}>
+                  <option value="open">Noch offen – ORC Track oder Alternativlauf planen</option>
+                  <option value="orc">ORC Track steht fest</option>
+                  <option value="alternative">Kein ORC Track – Alternativlauf planen</option>
+                  <option value="off">Samstag ohne Lauf planen</option>
+                </select>
+              </label>
+            </section>
 
             <div className="form-grid">
               <label>Energie heute

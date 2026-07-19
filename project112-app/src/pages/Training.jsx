@@ -60,7 +60,7 @@ export default function Training() {
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState("");
 
-  const activities = useMemo(() => preferredActivities(state.activities), [state.activities]);
+  const activities = useMemo(() => preferredActivities(state.activities, { hideStrava: Boolean(state.intervals?.connected) }), [state.activities, state.intervals?.connected]);
   const currentMonth = new Date().toISOString().slice(0, 7);
   const currentMonthActivities = activities.filter((activity) => monthKey(activity) === currentMonth);
   const currentMonthSummary = useMemo(() => summaries(currentMonthActivities), [currentMonthActivities]);
@@ -206,7 +206,7 @@ export default function Training() {
                         return (
                           <article className={`activity-row ${kind ? "reviewable" : "no-review"}`} key={activity.id}>
                             <button className="activity activity-main" onClick={() => kind && setSelected(activity)} disabled={!kind} title={kind ? `${reviewKindLabel(activity)} öffnen` : "Für diese Aktivität ist kein Review nötig"}>
-                              <div><b>{activity.name}</b><span>{fmtDate(activityDate(activity))} · {sourceLabel(activity)} · {sportGroup(activity).label}</span></div>
+                              <div><b>{activity.name}</b><span>{fmtDate(activityDate(activity))} · {sourceLabel(activity)} · {sportGroup(activity).label}{activity.weather?.temperature != null || activity.temperature != null ? ` · ${Math.round(Number(activity.weather?.temperature ?? activity.temperature))} °C` : ""}</span></div>
                               <div className="activity-metrics"><strong>{Number(activity.distance || 0).toLocaleString("de-DE")} km</strong><span>{hours(activity.duration)} · {Number(activity.distance || 0) > 0 ? pace(activity.distance, activity.duration) : "–"}</span></div>
                               <div className="activity-secondary"><strong>{activity.elevation || 0} hm</strong><span>{activity.avgHr ? `Ø ${activity.avgHr} bpm` : "Kein Puls"}</span></div>
                               <em>{kind ? (state.reviews[activity.id] ? "✓ Review" : month.key === currentMonth ? "Review öffnen" : "Review optional") : "Kein Review nötig"}</em>

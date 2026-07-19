@@ -78,6 +78,7 @@ function workoutType(item: Record<string, unknown>) {
 
 function isGuidedWorkout(item: Record<string, unknown>) {
   const value = `${item.type || ""} ${item.title || ""}`.toLowerCase();
+  if (item.choicePending || /samstagsoption/.test(value)) return false;
   return /run|lauf|orc|interval|schwelle|backyard|laufband|treadmill|rad|ride|bike|cycling/.test(value)
     && !/fußball|football|soccer|stabi|mobility|mobilität|rudern|row|ruhetag|rest/.test(value);
 }

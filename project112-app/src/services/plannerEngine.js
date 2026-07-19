@@ -12,6 +12,7 @@ export const workoutTypes = [
   "Backyard Training",
   "ORC Run",
   "ORC Track",
+  "Samstagsoption",
   "Fußball",
   "Stabi",
   "Rudern",
@@ -318,7 +319,14 @@ function addStrengthSessions(plan, weekStart, config, readiness) {
 
 function distributeEasyKilometers(plan, weekStart, target, fixedKm, config, phase, readiness, cycle) {
   const allowed = new Set(config.runDays?.length ? config.runDays : ["Dienstag", "Mittwoch", "Freitag", "Samstag", "Sonntag"]);
-  const candidates = ["Dienstag", "Freitag", "Donnerstag", "Montag"].filter((day) => allowed.has(day));
+  const fixedAppointments = config.fixedAppointments || {};
+  const candidates = [
+    "Dienstag",
+    "Freitag",
+    "Donnerstag",
+    ...(!fixedAppointments.orcRun ? ["Mittwoch"] : []),
+    ...(!fixedAppointments.football ? ["Montag"] : []),
+  ].filter((day) => allowed.has(day));
   const remaining = Math.max(0, target - fixedKm);
   const desiredSessions = target >= 75 ? 3 : remaining > 12 ? 2 : 1;
   const sessionCount = Math.min(desiredSessions, candidates.length);
@@ -335,7 +343,7 @@ function distributeEasyKilometers(plan, weekStart, target, fixedKm, config, phas
       distance,
       duration: Math.round(distance * 6.4),
       notes: quality
-        ? "Nur kontrolliert: Einlaufen, kurzer Schwellenblock, auslaufen. Fußball zählt bereits als intensive Belastung."
+        ? (fixedAppointments.football ? "Nur kontrolliert: Einlaufen, kurzer Schwellenblock, auslaufen. Fußball zählt bereits als intensive Belastung." : "Nur kontrolliert: Einlaufen, kurzer Schwellenblock und auslaufen.")
         : "Locker laufen, keine Pace erzwingen.",
       optional: index === sessionCount - 1 && target >= 55,
       doubleSession: day === "Montag" || (config.doubleTrainingDays || []).includes(day),
@@ -371,6 +379,11 @@ export function generateWeekPlan({
   const reviewReference = weekStart > today ? weekStart : new Date(today.getTime() + DAY_MS);
   const reviewReadiness = reviewGuidance(activities, reviews, reviewReference);
   const readiness = combineReadiness(checkinReadiness, reviewReadiness);
+  const fixedAppointments = {
+    football: config.fixedAppointments?.football !== false,
+    orcRun: config.fixedAppointments?.orcRun !== false,
+    saturdayMode: config.fixedAppointments?.saturdayMode || "open",
+  };
 
   const base = recentAverage || Math.max(25, Math.min(45, Number(mission?.targetKm || 50) * 0.4));
   const cycleFactor = recoveryWeek ? 0.75 : [1, 1.04, 1.08][cycle - 1] || 1;
@@ -381,8 +394,8 @@ export function generateWeekPlan({
   target = Math.max(readiness.longRunAllowed ? 22 : 12, Math.round(target));
 
   const allowedRuns = new Set(config.runDays?.length ? config.runDays : ["Dienstag", "Mittwoch", "Freitag", "Samstag", "Sonntag"]);
-  const wednesdayKm = allowedRuns.has("Mittwoch") ? Math.min(10, Math.max(6, Math.round(target * 0.18))) : 0;
-  const saturdayKm = allowedRuns.has("Samstag") && target >= 42 && phase.key !== "taper" && readiness.longRunAllowed ? Math.min(10, Math.max(6, Math.round(target * 0.13))) : 0;
+  const wednesdayKm = fixedAppointments.orcRun && allowedRuns.has("Mittwoch") ? Math.min(10, Math.max(6, Math.round(target * 0.18))) : 0;
+  const saturdayKm = fixedAppointments.saturdayMode !== "off" && allowedRuns.has("Samstag") && target >= 42 && phase.key !== "taper" && readiness.longRunAllowed ? Math.min(10, Math.max(6, Math.round(target * 0.13))) : 0;
   const desiredLong = Math.round(target * phase.longShare * (recoveryWeek ? 0.82 : 1));
   const progressionCap = longestRecent > 0 ? Math.max(14, Math.round(longestRecent * 1.12)) : desiredLong;
   const longRun = readiness.longRunAllowed
@@ -392,17 +405,19 @@ export function generateWeekPlan({
   const fridayWeather = weatherDecision(weatherForDate(forecast, dateForDay(weekStart, 4)), config);
   const sundayWeather = weatherDecision(weatherForDate(forecast, dateForDay(weekStart, 6)), config);
 
-  let plan = [
-    item(weekStart, 0, {
+  let plan = [];
+
+  if (fixedAppointments.football) {
+    plan.push(item(weekStart, 0, {
       time: config.footballTime || "19:00",
       title: "Fußball",
       type: "Fußball",
       distance: 0,
-      notes: "Fixe intensive Einheit. Wird als Belastung berücksichtigt, aber nicht als Laufkilometer.",
+      notes: "Bestätigter Fixtermin. Wird als intensive Belastung berücksichtigt, aber nicht als Laufkilometer.",
       optional: false,
       fixed: true,
-    }),
-  ];
+    }));
+  }
 
   if (wednesdayKm > 0) {
     plan.push(item(weekStart, 2, {
@@ -410,22 +425,47 @@ export function generateWeekPlan({
       title: "ORC Run",
       type: "ORC Run",
       distance: wednesdayKm,
-      notes: "Fixer Gruppenlauf. Intensität nach dem Fußball kontrolliert halten.",
+      notes: fixedAppointments.football ? "Bestätigter Gruppenlauf. Intensität nach dem Fußball kontrolliert halten." : "Bestätigter Gruppenlauf. Locker und gruppengerecht laufen.",
       optional: false,
       fixed: true,
     }));
   }
 
   if (saturdayKm > 0) {
-    plan.push(item(weekStart, 5, {
-      time: config.orcTrackTime || "09:00",
-      title: "ORC Track",
-      type: "ORC Track",
-      distance: saturdayKm,
-      notes: phase.key === "specific" ? "Optionaler Vorbelastungslauf vor dem Longrun." : "Optional. Nur bei guten Beinen mitnehmen.",
-      optional: true,
-      fixed: true,
-    }));
+    if (fixedAppointments.saturdayMode === "orc") {
+      plan.push(item(weekStart, 5, {
+        time: config.orcTrackTime || "09:00",
+        title: "ORC Track",
+        type: "ORC Track",
+        distance: saturdayKm,
+        notes: phase.key === "specific" ? "Bestätigter ORC Track als Vorbelastung vor dem Longrun." : "Bestätigter ORC Track. Intensität kontrolliert halten.",
+        optional: false,
+        fixed: true,
+      }));
+    } else if (fixedAppointments.saturdayMode === "alternative") {
+      plan.push(item(weekStart, 5, {
+        time: "09:00",
+        title: `${saturdayKm} km locker`,
+        type: "Easy Run",
+        distance: saturdayKm,
+        notes: "ORC Track findet für dich nicht statt. Stattdessen lockerer Alternativlauf.",
+        optional: false,
+      }));
+    } else {
+      plan.push(item(weekStart, 5, {
+        time: config.orcTrackTime || "09:00",
+        title: `ORC Track oder ${saturdayKm} km locker`,
+        type: "Samstagsoption",
+        distance: saturdayKm,
+        notes: "Entscheidung meist am Freitag: ORC Track wählen oder denselben Umfang locker als Alternativlauf absolvieren.",
+        optional: false,
+        choicePending: true,
+        choiceOptions: {
+          orc: { title: "ORC Track", type: "ORC Track", fixed: true },
+          alternative: { title: `${saturdayKm} km locker`, type: "Easy Run", fixed: false },
+        },
+      }));
+    }
   }
 
   if (longRun > 0 && allowedRuns.has("Sonntag")) {
@@ -460,13 +500,16 @@ export function generateWeekPlan({
         if (entry.type === "ORC Track") {
           return { ...entry, optional: true, title: "ORC Track sehr locker oder auslassen", notes: "Keine harte Bahn-/Tempoeinheit in dieser Woche." };
         }
+        if (entry.type === "Samstagsoption") {
+          return { ...entry, type: "Easy Run", title: `${entry.distance} km locker`, choicePending: false, choiceOptions: null, notes: "Coach-Anpassung: kein ORC Track, nur lockerer Alternativlauf." };
+        }
         return entry;
       });
   }
 
   if (config.checkin?.illness === "recovering") {
     plan = plan
-      .filter((entry) => !["Fußball", "ORC Track", "Backyard Training", "Long Run"].includes(entry.type))
+      .filter((entry) => !["Fußball", "ORC Track", "Samstagsoption", "Backyard Training", "Long Run"].includes(entry.type))
       .map((entry) => {
         if (["ORC Run", "Easy Run", "Laufband", "Schwellenlauf"].includes(entry.type)) {
           const distance = Math.min(6, Math.max(3, Number(entry.distance || 4)));

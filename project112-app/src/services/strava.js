@@ -89,7 +89,11 @@ export function mapStravaActivity(activity) {
     type,
     category: isRunningActivity(activity) ? "running" : "cross-training",
     workoutType: activity.workout_type ?? null,
-    temperature: null,
+    temperature: activity.average_temp ?? null,
+    coordinates: Array.isArray(activity.start_latlng) && activity.start_latlng.length >= 2
+      ? { lat: Number(activity.start_latlng[0]), lon: Number(activity.start_latlng[1]) }
+      : null,
+    location: activity.location_city || activity.location_state || "",
     source: "strava",
     sources: ["strava"],
   };
@@ -134,6 +138,10 @@ export function mergeStravaActivities(existing, imported) {
       hasHeartRate: current.hasHeartRate ?? stravaActivity.hasHeartRate,
       elevation: current.elevation || stravaActivity.elevation,
       calories: current.calories ?? stravaActivity.calories,
+      temperature: current.temperature ?? stravaActivity.temperature,
+      weather: current.weather || stravaActivity.weather || null,
+      coordinates: current.coordinates || stravaActivity.coordinates || null,
+      location: current.location || stravaActivity.location || "",
       externalId: current.externalId || stravaActivity.externalId,
       stravaId: stravaActivity.externalId || current.stravaId || null,
       sources: Array.from(new Set([...(current.sources || [current.source].filter(Boolean)), "strava"])),

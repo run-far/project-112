@@ -61,6 +61,43 @@ function isRunningType(type) {
   return ["Run", "TrailRun", "VirtualRun"].includes(type);
 }
 
+function coordinateValue(activity, names) {
+  for (const name of names) {
+    const value = Number(activity?.[name]);
+    if (Number.isFinite(value) && value !== 0) return value;
+  }
+  return null;
+}
+
+function activityCoordinates(activity) {
+  const pair = activity?.start_latlng || activity?.startLatLng || activity?.start_lat_lng;
+  if (Array.isArray(pair) && pair.length >= 2) {
+    const latitude = Number(pair[0]);
+    const longitude = Number(pair[1]);
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) return { lat: latitude, lon: longitude };
+  }
+  const lat = coordinateValue(activity, ["start_latitude", "start_lat", "icu_start_latitude", "latitude"]);
+  const lon = coordinateValue(activity, ["start_longitude", "start_lng", "start_lon", "icu_start_longitude", "longitude"]);
+  return lat != null && lon != null ? { lat, lon } : null;
+}
+
+function sourceWeather(activity) {
+  const temperature = activity.average_temp ?? activity.avg_temp ?? activity.icu_average_temp ?? null;
+  if (temperature == null) return null;
+  return {
+    temperature: Number(temperature),
+    feelsLike: activity.apparent_temperature != null ? Number(activity.apparent_temperature) : null,
+    humidity: activity.relative_humidity != null ? Number(activity.relative_humidity) : null,
+    precipitation: activity.precipitation != null ? Number(activity.precipitation) : null,
+    windSpeed: activity.wind_speed != null ? Number(activity.wind_speed) : null,
+    windGusts: activity.wind_gusts != null ? Number(activity.wind_gusts) : null,
+    weatherCode: activity.weather_code != null ? Number(activity.weather_code) : null,
+    condition: activity.weather_condition || null,
+    observedAt: activity.start_date_local || null,
+    source: "Intervals.icu",
+  };
+}
+
 export function mapIntervalsActivity(activity) {
   const durationSeconds = Number(activity.moving_time || activity.icu_recording_time || activity.elapsed_time || 0);
   const sourceName = String(activity.name || "Intervals.icu Aktivität");
@@ -102,7 +139,10 @@ export function mapIntervalsActivity(activity) {
     sportType: activity.sport_type || type,
     subType: activity.sub_type || activity.icu_activity_type || activity.category || null,
     category: isRunningType(type) ? "running" : "cross-training",
-    temperature: activity.average_temp ?? null,
+    temperature: activity.average_temp ?? activity.avg_temp ?? activity.icu_average_temp ?? null,
+    weather: sourceWeather(activity),
+    coordinates: activityCoordinates(activity),
+    location: activity.location || activity.city || "",
     source: "intervals",
     sources: ["intervals"],
   };
@@ -149,6 +189,10 @@ export function mergeIntervalsActivities(existing, imported) {
       hasHeartRate: intervalsActivity.hasHeartRate ?? current.hasHeartRate,
       elevation: intervalsActivity.elevation || current.elevation,
       calories: intervalsActivity.calories ?? current.calories,
+      temperature: intervalsActivity.temperature ?? current.temperature,
+      weather: intervalsActivity.weather || current.weather || null,
+      coordinates: intervalsActivity.coordinates || current.coordinates || null,
+      location: intervalsActivity.location || current.location || "",
       averageCadence: intervalsActivity.averageCadence ?? current.averageCadence,
       trainingLoad: intervalsActivity.trainingLoad ?? current.trainingLoad,
       intensity: intervalsActivity.intensity ?? current.intensity,

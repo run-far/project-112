@@ -13,36 +13,57 @@ function utcStamp(date = new Date()) {
   return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
 }
 
-function compactLocal(date: Date) {
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(date.getUTCDate()).padStart(2, "0");
-  const hours = String(date.getUTCHours()).padStart(2, "0");
-  const minutes = String(date.getUTCMinutes()).padStart(2, "0");
-  return `${year}${month}${day}T${hours}${minutes}00`;
+function dateValue(raw: unknown) {
+  return String(raw || "").replaceAll("-", "");
 }
 
-function localRange(item: Record<string, unknown>) {
-  const date = String(item.date || "");
-  const time = String(item.time || "18:00");
-  const [year, month, day] = date.split("-").map(Number);
-  const [hours, minutes] = time.split(":").map(Number);
-  if (!year || !month || !day) return null;
+function nextDateValue(raw: unknown) {
+  const date = new Date(`${String(raw)}T12:00:00`);
+  date.setDate(date.getDate() + 1);
+  return `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`;
+}
 
-  // UTC is used here only for calendar arithmetic. The generated value is a
-  // floating Europe/Berlin wall-clock time through the TZID parameter below.
-  const start = new Date(Date.UTC(year, month - 1, day, hours || 0, minutes || 0, 0));
-  const end = new Date(start.getTime() + Math.max(30, Number(item.duration || 60)) * 60_000);
-  return { start: compactLocal(start), end: compactLocal(end) };
+function containsDistance(title: unknown, distance: number) {
+  if (!distance) return true;
+  const normalized = String(title || "").replace(",", ".").toLowerCase();
+  const variants = [distance.toFixed(0), distance.toFixed(1)].map((value) => value.replace(".0", ""));
+  return variants.some((value) => new RegExp(`(^|\\s)${value.replace(".", "[.,]")}\\s*km`, "i").test(normalized));
+}
+
+function calendarIcon(item: Record<string, unknown>) {
+  const text = `${item.type || ""} ${item.title || ""}`.toLowerCase();
+  if (item.choicePending || /samstagsoption|oder/.test(text)) return "🔀";
+  if (item.fixed || /fußball|football|soccer|orc run|orc track/.test(text)) return "📍";
+  if (/long run|longrun|backyard|intervall|schwelle|threshold|tempo/.test(text)) return "🔑";
+  if (/recovery|regeneration/.test(text)) return "🔵";
+  if (/laufband|treadmill/.test(text)) return "🏠";
+  if (/rad|ride|bike|cycling/.test(text)) return "🚴";
+  if (/stabi|mobility|mobilität|kraft/.test(text)) return "💪";
+  if (/rudern|row/.test(text)) return "🚣";
+  if (/ruhetag|rest/.test(text)) return "💤";
+  return "🟢";
+}
+
+function calendarSummary(item: Record<string, unknown>) {
+  const distance = Number(item.distance || 0);
+  let title = String(item.title || item.type || "Training").trim();
+  const text = `${item.type || ""} ${title}`.toLowerCase();
+  if (item.optional && /easy run|locker/.test(text) && !/recovery|regeneration/.test(text)) {
+    title = title.replace(/locker/i, "Recovery");
+    if (!/recovery/i.test(title)) title = "Recovery";
+  }
+  if (distance > 0 && !containsDistance(title, distance)) {
+    title = `${Number.isInteger(distance) ? distance : distance.toFixed(1)} km ${title}`;
+  }
+  if (item.optional && !/^optional:/i.test(title)) title = `Optional: ${title}`;
+  return `${calendarIcon(item)} ${title}`;
 }
 
 function buildCalendar(plan: Record<string, unknown>[]) {
   const stamp = utcStamp();
   const events = plan
-    .filter((item) => !item.archived && item.date)
+    .filter((item) => !item.archived && /^\d{4}-\d{2}-\d{2}$/.test(String(item.date || "")))
     .map((item) => {
-      const range = localRange(item);
-      if (!range) return "";
       const description = [
         item.type,
         item.distance ? `${item.distance} km` : "",
@@ -51,16 +72,16 @@ function buildCalendar(plan: Record<string, unknown>[]) {
       ].filter(Boolean).join(" · ");
       return [
         "BEGIN:VEVENT",
-        `UID:${escapeIcs(item.id || crypto.randomUUID())}@stridehq`,
+        `UID:${escapeIcs(item.id || crypto.randomUUID())}@endurance-intelligence`,
         `DTSTAMP:${stamp}`,
-        `DTSTART;TZID=Europe/Berlin:${range.start}`,
-        `DTEND;TZID=Europe/Berlin:${range.end}`,
-        `SUMMARY:${escapeIcs(`Endurance Intelligence – ${item.title || item.type || "Training"}`)}`,
+        `DTSTART;VALUE=DATE:${dateValue(item.date)}`,
+        `DTEND;VALUE=DATE:${nextDateValue(item.date)}`,
+        `SUMMARY:${escapeIcs(calendarSummary(item))}`,
         `DESCRIPTION:${escapeIcs(description)}`,
+        "TRANSP:TRANSPARENT",
         "END:VEVENT",
       ].join("\r\n");
-    })
-    .filter(Boolean);
+    });
 
   return [
     "BEGIN:VCALENDAR",
@@ -68,8 +89,7 @@ function buildCalendar(plan: Record<string, unknown>[]) {
     "PRODID:-//Endurance Intelligence//Training Calendar//DE",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
-    "X-WR-CALNAME:Endurance Intelligence Trainingsplan",
-    "X-WR-TIMEZONE:Europe/Berlin",
+    "X-WR-CALNAME:Endurance Intelligence",
     ...events,
     "END:VCALENDAR",
     "",
@@ -97,7 +117,7 @@ Deno.serve(async (request) => {
     headers: {
       ...headers,
       "Content-Type": "text/calendar; charset=utf-8",
-      "Content-Disposition": 'inline; filename="stridehq.ics"',
+      "Content-Disposition": 'inline; filename="endurance-intelligence.ics"',
       "Cache-Control": "public, max-age=300",
     },
   });
