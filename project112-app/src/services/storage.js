@@ -22,11 +22,12 @@ function sanitizeState(state, defaults) {
       ? state.fuel.filter((item) => !isDemoEntry(item))
       : [],
     reviews: state?.reviews && typeof state.reviews === "object" ? state.reviews : {},
+    healthCheckins: Array.isArray(state?.healthCheckins) ? state.healthCheckins : [],
+    planner: { ...defaults.planner, ...(state?.planner || {}) },
     strava: { ...defaults.strava, ...(state?.strava || {}) },
     garmin: { ...defaults.garmin, ...(state?.garmin || {}) },
     mission: { ...defaults.mission, ...(state?.mission || {}) },
     calendar: { ...defaults.calendar, ...(state?.calendar || {}) },
-    planner: { ...defaults.planner, ...(state?.planner || {}) },
   };
 }
 

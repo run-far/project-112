@@ -1,66 +1,86 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useApp } from "../context/AppContext";
 import { Card, PageTitle } from "../components/UI";
-import { connectStrava, exchangeCode, fetchActivities, mapRunningActivities } from "../services/strava";
+import { connectStrava, disconnectStravaConnection, stravaOnlineReady, stravaStatus } from "../services/strava";
 import { downloadCalendar, publicCalendarUrl } from "../services/calendar";
 import { resetState } from "../services/storage";
 import { mergeGarminActivities, readGarminExport } from "../services/garminImport";
 import { calendarSubscriptionUrl } from "../services/supabase";
+import { fetchIntervalsStatus, intervalsOnlineReady } from "../services/intervals";
 
 export default function Settings() {
-  const { state, setState, session, cloudStatus, cloudUpdatedAt, calendarToken, uploadLocalState, reloadCloudState, logout } = useApp();
+  const { state, setState, session, cloudStatus, cloudUpdatedAt, calendarToken, stravaSyncStatus, intervalsSyncStatus, syncIntervalsNow, syncStravaNow, uploadLocalState, reloadCloudState, logout } = useApp();
   const [message, setMessage] = useState("");
   const [calendarMessage, setCalendarMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [garminBusy, setGarminBusy] = useState(false);
   const [garminPreview, setGarminPreview] = useState(null);
   const [garminMessage, setGarminMessage] = useState("");
+  const [intervalsMessage, setIntervalsMessage] = useState("");
+  const [intervalsBusy, setIntervalsBusy] = useState(false);
   const garminInput = useRef(null);
-  const exchangeStarted = useRef(false);
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get("code");
-    const oauthError = params.get("error");
-    if (oauthError) {
-      // OAuth callback is handled once on page load.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setMessage("Strava-Verbindung wurde abgebrochen.");
-      window.history.replaceState({}, "", window.location.pathname);
-      return;
-    }
-    if (!code || exchangeStarted.current) return;
-    exchangeStarted.current = true;
-    setBusy(true);
-    setMessage("Strava wird verbunden und deine Läufe werden geladen …");
-    async function finishConnection() {
-      try {
-        const tokenData = await exchangeCode(code);
-        const rawActivities = await fetchActivities(tokenData.access_token);
-        const runningActivities = mapRunningActivities(rawActivities);
-        setState((current) => {
-          const garminActivities = current.activities.filter((activity) => activity.source === "garmin");
-          const merged = mergeGarminActivities(runningActivities, garminActivities);
-          return {
-            ...current,
-            activities: merged.activities,
-            strava: { ...current.strava, connected: true, athlete: tokenData.athlete || null, token: tokenData.access_token, refreshToken: tokenData.refresh_token || null, expiresAt: tokenData.expires_at || null, lastSyncAt: new Date().toISOString() },
-          };
-        });
-        setMessage(`${runningActivities.length} Läufe seit 01.01.2025 aus Strava geladen.`);
-        window.history.replaceState({}, "", window.location.pathname);
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : String(error));
-      } finally { setBusy(false); }
-    }
-    finishConnection();
-  }, [setState]);
 
-  function connect() {
-    try { setMessage(""); connectStrava(); }
-    catch (error) { setMessage(error instanceof Error ? error.message : String(error)); }
+
+  async function checkIntervals() {
+    setIntervalsBusy(true);
+    setIntervalsMessage("");
+    try {
+      const status = await fetchIntervalsStatus();
+      setState((current) => ({
+        ...current,
+        intervals: {
+          ...current.intervals,
+          configured: Boolean(status.configured),
+          connected: Boolean(status.connected),
+        },
+      }));
+      setIntervalsMessage(status.connected ? "Intervals.icu ist verbunden." : status.message || "Intervals.icu ist noch nicht eingerichtet.");
+    } catch (error) {
+      setIntervalsMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIntervalsBusy(false);
+    }
   }
 
+  async function syncIntervals() {
+    setIntervalsMessage("");
+    try {
+      const result = await syncIntervalsNow();
+      setIntervalsMessage(`${result.added || 0} neue Aktivitäten geladen, ${result.duplicates || 0} vorhandene Einheiten ergänzt.`);
+    } catch (error) {
+      setIntervalsMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function connect() {
+    setBusy(true);
+    setMessage("");
+    try { await connectStrava(state.strava.connected); }
+    catch (error) { setMessage(error instanceof Error ? error.message : String(error)); setBusy(false); }
+  }
+
+  async function disconnectStrava() {
+    setBusy(true);
+    setMessage("");
+    try {
+      await disconnectStravaConnection();
+      setState((current) => ({ ...current, strava: { ...current.strava, connected: false, athlete: null, lastSyncAt: null } }));
+      setMessage("Strava-Verbindung entfernt. Bereits importierte Aktivitäten bleiben erhalten.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    } finally { setBusy(false); }
+  }
+
+  async function syncStrava() {
+    setMessage("");
+    try {
+      const result = await syncStravaNow();
+      setMessage(`${result.added || 0} neue Aktivitäten geladen, ${result.duplicates || 0} vorhandene Einheiten ergänzt.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
 
   async function previewGarmin(file) {
     if (!file) return;
@@ -98,6 +118,7 @@ export default function Settings() {
   }
 
   const athleteName = [state.strava.athlete?.firstname, state.strava.athlete?.lastname].filter(Boolean).join(" ");
+  const stravaInfo = stravaStatus();
   const calendarUrl = calendarToken ? calendarSubscriptionUrl(calendarToken) : publicCalendarUrl;
   const cloudStatusLabel = { local: "Nur lokal", loading: "Cloud wird geladen …", saving: "Wird gespeichert …", synced: "Synchronisiert", error: "Synchronisierung fehlgeschlagen" }[cloudStatus] || cloudStatus;
 
@@ -105,7 +126,7 @@ export default function Settings() {
     <PageTitle eyebrow="Settings" title="Verbindungen & Daten" />
     <div className="grid">
       <Card className="wide">
-        <p className="eyebrow">StrideHQ Cloud</p><h2>Geräteübergreifend synchronisiert</h2>
+        <p className="eyebrow">Endurance Intelligence Cloud</p><h2>Geräteübergreifend synchronisiert</h2>
         <p className="muted">Angemeldet als <b>{session?.user?.email}</b>. Änderungen werden automatisch in Supabase gespeichert und auf anderen Geräten geladen.</p>
         <span className={`cloud-status ${cloudStatus}`}>{cloudStatusLabel}</span>
         {cloudUpdatedAt && <p className="muted">Letzte Cloud-Aktualisierung: {new Date(cloudUpdatedAt).toLocaleString("de-DE")}</p>}
@@ -115,16 +136,37 @@ export default function Settings() {
           <button className="secondary" onClick={logout}>Abmelden</button>
         </div>
       </Card>
+
       <Card>
-        <p className="eyebrow">Strava</p><h2>{state.strava.connected ? "Verbunden" : "Nicht verbunden"}</h2>
-        <p className="muted">{state.strava.connected ? `${athleteName ? `Verbunden mit ${athleteName}. ` : ""}Deine Laufaktivitäten können synchronisiert werden.` : "Verbinde Strava, damit deine Laufaktivitäten automatisch in StrideHQ erscheinen."}</p>
-        <button className="strava" onClick={connect} disabled={busy}>{busy ? "Strava wird verbunden …" : state.strava.connected ? "Neu verbinden" : "Connect with Strava"}</button>
+        <p className="eyebrow">Intervals.icu · primär</p>
+        <h2>{state.intervals?.connected ? "Verbunden" : state.intervals?.configured ? "Verbindung prüfen" : "Noch nicht eingerichtet"}</h2>
+        <p className="muted">Neue Garmin-Aktivitäten können automatisch über Intervals.icu geladen werden. Strava bleibt als optionale Ersatzquelle erhalten.</p>
+        {state.intervals?.lastSyncAt && <p className="muted">Letzter Sync: {new Date(state.intervals.lastSyncAt).toLocaleString("de-DE")}</p>}
+        <div className="button-row">
+          <button onClick={checkIntervals} disabled={intervalsBusy || !intervalsOnlineReady()}>{intervalsBusy ? "Prüfe …" : "Verbindung prüfen"}</button>
+          {state.intervals?.connected && <button className="secondary" onClick={syncIntervals} disabled={intervalsSyncStatus === "syncing"}>{intervalsSyncStatus === "syncing" ? "Synchronisiert …" : "Jetzt synchronisieren"}</button>}
+        </div>
+        <p className="muted">Einrichtung: Intervals.icu → Settings → Developer Settings → API Key erzeugen. Der Key wird ausschließlich als Supabase-Secret gespeichert.</p>
+        {intervalsMessage && <p className="connection-message">{intervalsMessage}</p>}
+      </Card>
+
+      <Card>
+        <p className="eyebrow">Strava · optional</p><h2>{stravaInfo.ready ? (state.strava.connected ? "Verbunden" : "Nicht verbunden") : stravaInfo.label}</h2>
+        <p className="muted">{stravaInfo.ready
+          ? (state.strava.connected ? `${athleteName ? `Verbunden mit ${athleteName}. ` : ""}Neue Aktivitäten werden beim Öffnen der App automatisch synchronisiert.` : "OAuth und Synchronisierung laufen über eine sichere Supabase-Funktion – ohne localhost und ohne separaten Server.")
+          : `${stravaInfo.reason} Bereits importierte Strava-Aktivitäten bleiben erhalten.`}</p>
+        {state.strava.lastSyncAt && <p className="muted">Letzter Sync: {new Date(state.strava.lastSyncAt).toLocaleString("de-DE")}</p>}
+        <div className="button-row">
+          <button className="strava" onClick={connect} disabled={busy || !stravaOnlineReady()}>{busy ? "Strava wird geöffnet …" : state.strava.connected ? "Neu verbinden" : "Connect with Strava"}</button>
+          {state.strava.connected && <button className="secondary" onClick={syncStrava} disabled={stravaSyncStatus === "syncing"}>{stravaSyncStatus === "syncing" ? "Synchronisiert …" : "Jetzt synchronisieren"}</button>}
+          {state.strava.connected && <button className="secondary" onClick={disconnectStrava} disabled={busy}>Verbindung entfernen</button>}
+        </div>
         {message && <p className="connection-message">{message}</p>}
       </Card>
 
 
       <Card className="wide">
-        <p className="eyebrow">Garmin</p><h2>Garmin-Export importieren</h2>
+        <p className="eyebrow">Garmin · Historie & Backup</p><h2>Garmin-Export importieren</h2>
         <p className="muted">Liest den vollständigen Garmin-Datenexport direkt im Browser. Importiert werden alle Aktivitäten ab 01.01.2025; vorhandene Strava-Aktivitäten werden als Duplikate erkannt und ergänzt.</p>
         <input
           ref={garminInput}

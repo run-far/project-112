@@ -1,4 +1,4 @@
-name: Deploy StrideHQ to GitHub Pages
+name: Deploy Endurance Intelligence to GitHub Pages
 
 on:
   push:
@@ -29,10 +29,10 @@ jobs:
       - name: Abhängigkeiten installieren
         working-directory: project112-app
         run: npm ci
-      - name: StrideHQ prüfen
+      - name: Endurance Intelligence prüfen
         working-directory: project112-app
         run: npm run lint
-      - name: StrideHQ bauen
+      - name: Endurance Intelligence bauen
         working-directory: project112-app
         run: npm run build
       - name: GitHub Pages konfigurieren

@@ -10,67 +10,79 @@ function escapeIcs(value) {
     .replace(/;/g, "\\;");
 }
 
-function startOfCurrentWeek() {
-  const now = new Date();
-  const monday = new Date(now);
-  const day = now.getDay() || 7;
-  monday.setDate(now.getDate() - day + 1);
-  monday.setHours(0, 0, 0, 0);
-  return monday;
+function isoDateLocal(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
-function dateForWeekday(dayName, time = "18:00", exactDate = null) {
-  if (exactDate) {
-    const selected = new Date(`${exactDate}T00:00:00`);
-    const [hours, minutes] = String(time || "18:00").split(":").map(Number);
-    selected.setHours(hours || 0, minutes || 0, 0, 0);
-    return selected;
-  }
+function dateForWeekday(dayName) {
   const names = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
   const target = names.indexOf(dayName);
-  const monday = startOfCurrentWeek();
-  const offset = target === 0 ? 6 : Math.max(0, target - 1);
-  monday.setDate(monday.getDate() + offset);
-  const [hours, minutes] = String(time || "18:00").split(":").map(Number);
-  monday.setHours(hours || 0, minutes || 0, 0, 0);
-  return monday;
+  const monday = new Date();
+  const day = monday.getDay() || 7;
+  monday.setDate(monday.getDate() - day + 1 + (target === 0 ? 6 : Math.max(0, target - 1)));
+  return isoDateLocal(monday);
 }
 
-function formatIcsDate(date) {
+function compactLocal(date) {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const hours = String(date.getUTCHours()).padStart(2, "0");
+  const minutes = String(date.getUTCMinutes()).padStart(2, "0");
+  return `${year}${month}${day}T${hours}${minutes}00`;
+}
+
+function localRange(item) {
+  const rawDate = item.date || dateForWeekday(item.day);
+  const [year, month, day] = String(rawDate).split("-").map(Number);
+  const [hours, minutes] = String(item.time || "18:00").split(":").map(Number);
+  if (!year || !month || !day) return null;
+  const start = new Date(Date.UTC(year, month - 1, day, hours || 0, minutes || 0, 0));
+  const end = new Date(start.getTime() + Math.max(30, Number(item.duration || 60)) * 60_000);
+  return { start: compactLocal(start), end: compactLocal(end) };
+}
+
+function formatUtcStamp(date) {
   return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
 }
 
 export function buildCalendar(plan) {
-  const stamp = formatIcsDate(new Date());
-  const events = (Array.isArray(plan) ? plan : []).map((item) => {
-    const start = dateForWeekday(item.day, item.time, item.date);
-    const end = new Date(start.getTime() + Math.max(30, Number(item.duration || 60)) * 60_000);
-    const description = [
-      item.type,
-      item.distance ? `${item.distance} km` : "",
-      item.optional ? "Optional" : "Pflicht",
-      item.notes || "",
-    ].filter(Boolean).join(" · ");
+  const stamp = formatUtcStamp(new Date());
+  const events = (Array.isArray(plan) ? plan : [])
+    .filter((item) => !item.archived)
+    .map((item) => {
+      const range = localRange(item);
+      if (!range) return "";
+      const description = [
+        item.type,
+        item.distance ? `${item.distance} km` : "",
+        item.optional ? "Optional" : "Pflicht",
+        item.notes || "",
+      ].filter(Boolean).join(" · ");
 
-    return [
-      "BEGIN:VEVENT",
-      `UID:${escapeIcs(item.id || crypto.randomUUID())}@stridehq`,
-      `DTSTAMP:${stamp}`,
-      `DTSTART:${formatIcsDate(start)}`,
-      `DTEND:${formatIcsDate(end)}`,
-      `SUMMARY:${escapeIcs(`StrideHQ – ${item.title || item.type || "Training"}`)}`,
-      `DESCRIPTION:${escapeIcs(description)}`,
-      "END:VEVENT",
-    ].join("\r\n");
-  });
+      return [
+        "BEGIN:VEVENT",
+        `UID:${escapeIcs(item.id || crypto.randomUUID())}@stridehq`,
+        `DTSTAMP:${stamp}`,
+        `DTSTART;TZID=Europe/Berlin:${range.start}`,
+        `DTEND;TZID=Europe/Berlin:${range.end}`,
+        `SUMMARY:${escapeIcs(`Endurance Intelligence – ${item.title || item.type || "Training"}`)}`,
+        `DESCRIPTION:${escapeIcs(description)}`,
+        "END:VEVENT",
+      ].join("\r\n");
+    })
+    .filter(Boolean);
 
   return [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//StrideHQ//Training Calendar//DE",
+    "PRODID:-//Endurance Intelligence//Training Calendar//DE",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
-    "X-WR-CALNAME:StrideHQ Trainingsplan",
+    "X-WR-CALNAME:Endurance Intelligence Trainingsplan",
     "X-WR-TIMEZONE:Europe/Berlin",
     ...events,
     "END:VCALENDAR",

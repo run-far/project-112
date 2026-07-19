@@ -1,27 +1,15 @@
 import { useMemo } from "react";
 import { useApp } from "../context/AppContext";
 import { Card, Metric, PageTitle } from "../components/UI";
-
-const SPORT_GROUPS = [
-  { key: "running", label: "Laufen", types: ["Run", "TrailRun", "VirtualRun"] },
-  { key: "soccer", label: "Fußball", types: ["Soccer"] },
-  { key: "cycling", label: "Radfahren", types: ["Ride", "MountainBikeRide", "VirtualRide"] },
-  { key: "swimming", label: "Schwimmen", types: ["Swim"] },
-  { key: "rowing", label: "Rudern", types: ["Rowing"] },
-  { key: "walking", label: "Wandern & Gehen", types: ["Walk", "Hike"] },
-  { key: "strength", label: "Kraft & Workout", types: ["WeightTraining", "Workout"] },
-];
+import { preferredActivities, sportGroup } from "../services/activityUtils";
 
 function sportBreakdown(activities) {
-  const knownTypes = new Set(SPORT_GROUPS.flatMap((group) => group.types));
-  const groups = SPORT_GROUPS.map((group) => ({
-    ...group,
-    count: activities.filter((activity) => group.types.includes(activity.type)).length,
-  })).filter((group) => group.count > 0);
-
-  const otherCount = activities.filter((activity) => !knownTypes.has(activity.type)).length;
-  if (otherCount > 0) groups.push({ key: "other", label: "Sonstige", count: otherCount });
-  return groups;
+  const grouped = new Map();
+  activities.forEach((activity) => {
+    const group = sportGroup(activity);
+    grouped.set(group.key, { key: group.key, label: group.label, count: (grouped.get(group.key)?.count || 0) + 1 });
+  });
+  return [...grouped.values()].sort((a, b) => b.count - a.count);
 }
 
 function yearStats(activities, year) {
@@ -42,11 +30,12 @@ function yearStats(activities, year) {
 
 export default function Analytics() {
   const { state } = useApp();
-  const stats2025 = useMemo(() => yearStats(state.activities, 2025), [state.activities]);
-  const stats2026 = useMemo(() => yearStats(state.activities, 2026), [state.activities]);
+  const activities = useMemo(() => preferredActivities(state.activities), [state.activities]);
+  const stats2025 = useMemo(() => yearStats(activities, 2025), [activities]);
+  const stats2026 = useMemo(() => yearStats(activities, 2026), [activities]);
 
-  if (state.activities.length === 0) {
-    return <><PageTitle eyebrow="Analytics" title="Zahlen mit Bedeutung" /><Card><h2>Noch keine Daten</h2><p className="muted">Importiere Garmin oder synchronisiere Strava, um deine Statistik ab 2025 aufzubauen.</p></Card></>;
+  if (activities.length === 0) {
+    return <><PageTitle eyebrow="Analytics" title="Zahlen mit Bedeutung" /><Card><h2>Noch keine Daten</h2><p className="muted">Importiere Garmin oder synchronisiere Intervals.icu, um deine Statistik ab 2025 aufzubauen.</p></Card></>;
   }
 
   return (

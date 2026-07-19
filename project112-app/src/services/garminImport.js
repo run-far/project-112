@@ -61,6 +61,9 @@ export function mapGarminActivity(activity) {
     id: `garmin-${activity.activityId}`,
     externalId: String(activity.activityId),
     name: activity.name || "Garmin Aktivität",
+    sourceName: activity.name || "Garmin Aktivität",
+    customName: null,
+    nameOverride: false,
     description: activity.description || "",
     date: startDateLocal?.slice(0, 10) || new Date(activity.beginTimestamp || Date.now()).toISOString().slice(0, 10),
     startDateLocal,
@@ -88,6 +91,8 @@ export function mapGarminActivity(activity) {
       ? { lat: Number(activity.startLatitude), lon: Number(activity.startLongitude) }
       : null,
     type,
+    eventTypeId: Number(activity.eventTypeId || 0) || null,
+    officialEvent: Number(activity.eventTypeId || 0) === 1,
     category: isRunType(type) ? "running" : "cross-training",
     source: "garmin",
     sources: ["garmin"],
@@ -181,9 +186,15 @@ export function mergeGarminActivities(existing, imported) {
     }
 
     const current = result[index];
+    const customName = current.customName || (current.nameOverride ? current.name : null);
+    const latestSourceName = garminActivity.sourceName || garminActivity.name;
     result[index] = {
       ...garminActivity,
       ...current,
+      name: customName || latestSourceName,
+      sourceName: latestSourceName,
+      customName: customName || null,
+      nameOverride: Boolean(customName),
       avgHr: current.avgHr ?? garminActivity.avgHr,
       maxHr: current.maxHr ?? garminActivity.maxHr,
       elevation: current.elevation || garminActivity.elevation,

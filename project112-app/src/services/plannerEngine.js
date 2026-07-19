@@ -1,8 +1,13 @@
+import { reviewKind } from "./activityUtils";
+
 const DAY_NAMES = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+const DAY_INDEX = { Montag: 0, Dienstag: 1, Mittwoch: 2, Donnerstag: 3, Freitag: 4, Samstag: 5, Sonntag: 6 };
+const DAY_MS = 86400000;
 
 export const workoutTypes = [
   "Easy Run",
   "Long Run",
+  "Schwellenlauf",
   "Intervalle",
   "Backyard Training",
   "ORC Run",
@@ -36,15 +41,216 @@ export function dateForDay(weekStart, index) {
   return date;
 }
 
-function recentRunningKilometers(activities, weekStart) {
+function activityDate(activity) {
+  return String(activity?.startDateLocal || activity?.date || "").slice(0, 10);
+}
+
+function isRun(activity) {
+  const value = `${activity?.type || ""} ${activity?.sportType || ""} ${activity?.name || ""}`.toLowerCase();
+  return value.includes("run") || value.includes("lauf") || value.includes("treadmill");
+}
+
+function runningWeeks(activities, weekStart, count = 8) {
+  return Array.from({ length: count }, (_, index) => {
+    const end = new Date(weekStart);
+    end.setDate(end.getDate() - index * 7);
+    const start = new Date(end);
+    start.setDate(start.getDate() - 7);
+    const km = activities.reduce((sum, activity) => {
+      const date = new Date(`${activityDate(activity)}T12:00:00`);
+      return isRun(activity) && date >= start && date < end ? sum + Number(activity.distance || 0) : sum;
+    }, 0);
+    return { start, km };
+  });
+}
+
+function weightedAverage(values) {
+  const weights = [0.4, 0.3, 0.2, 0.1];
+  const available = values.slice(0, 4);
+  const weightSum = available.reduce((sum, _value, index) => sum + weights[index], 0);
+  return weightSum ? available.reduce((sum, value, index) => sum + value * weights[index], 0) / weightSum : 0;
+}
+
+function recentLongestRun(activities, weekStart) {
   const start = new Date(weekStart);
-  start.setDate(start.getDate() - 28);
-  return activities.reduce((sum, activity) => {
-    const date = new Date(activity.startDateLocal || activity.date);
-    const type = String(activity.type || "").toLowerCase();
-    const isRun = type.includes("run") || type.includes("lauf") || type === "running";
-    return date >= start && date < weekStart && isRun ? sum + Number(activity.distance || 0) : sum;
-  }, 0) / 4;
+  start.setDate(start.getDate() - 56);
+  return activities.reduce((max, activity) => {
+    const date = new Date(`${activityDate(activity)}T12:00:00`);
+    if (!isRun(activity) || date < start || date >= weekStart) return max;
+    return Math.max(max, Number(activity.distance || 0));
+  }, 0);
+}
+
+function daysToMission(mission, weekStart) {
+  if (!mission?.date) return 999;
+  return Math.ceil((new Date(`${mission.date}T12:00:00`) - weekStart) / DAY_MS);
+}
+
+function trainingPhase(daysLeft) {
+  if (daysLeft <= 14) return { key: "taper", label: "Taper", factor: 0.62, longShare: 0.24 };
+  if (daysLeft <= 35) return { key: "peak", label: "Peak & Absicherung", factor: 0.94, longShare: 0.31 };
+  if (daysLeft <= 84) return { key: "specific", label: "Ultra-spezifisch", factor: 1.03, longShare: 0.36 };
+  if (daysLeft <= 140) return { key: "build", label: "Aufbau", factor: 1.02, longShare: 0.33 };
+  return { key: "base", label: "Grundlage", factor: 1, longShare: 0.3 };
+}
+
+function cycleWeek(mission, weekStart) {
+  const raw = mission?.preparationStartDate || mission?.date;
+  if (!raw) return 1;
+  const start = startOfWeek(new Date(`${raw}T12:00:00`));
+  const diffWeeks = Math.max(0, Math.floor((weekStart - start) / (7 * DAY_MS)));
+  return (diffWeeks % 4) + 1;
+}
+
+function recentMissedSignals(planHistory, weekStart) {
+  const since = new Date(weekStart);
+  since.setDate(since.getDate() - 21);
+  return planHistory.reduce((signals, item) => {
+    const date = new Date(`${item.date || "1970-01-01"}T12:00:00`);
+    if (date < since || date >= weekStart) return signals;
+    const reason = String(item.missedReason || "").toLowerCase();
+    if (reason.includes("müde")) signals.fatigue += 1;
+    if (reason.includes("schmerz")) signals.pain += 1;
+    if (reason.includes("krank")) signals.illness += 1;
+    return signals;
+  }, { fatigue: 0, pain: 0, illness: 0 });
+}
+
+function readinessDecision(config, missedSignals) {
+  const checkin = config.checkin || {};
+  let factor = 1;
+  let hardAllowed = true;
+  let longRunAllowed = true;
+  const notes = [];
+
+  const energy = Number(checkin.energy || 4);
+  if (energy <= 2) {
+    factor *= 0.78;
+    hardAllowed = false;
+    notes.push("Energie niedrig: Umfang reduziert und keine zusätzliche Qualitätseinheit.");
+  }
+
+  if (["unchanged", "worse"].includes(checkin.fatigue)) {
+    factor *= checkin.fatigue === "worse" ? 0.72 : 0.84;
+    hardAllowed = false;
+    notes.push("Müdigkeit noch vorhanden: Belastung wird vorsichtig geplant.");
+  } else if (missedSignals.fatigue >= 2 && checkin.fatigue !== "better") {
+    factor *= 0.88;
+    hardAllowed = false;
+    notes.push("Mehrere Müdigkeits-Rückmeldungen aus den letzten Wochen berücksichtigt.");
+  }
+
+  const painLevel = Number(checkin.painLevel || 0);
+  if (["unchanged", "worse"].includes(checkin.pain) || painLevel >= 4) {
+    factor *= painLevel >= 7 || checkin.pain === "worse" ? 0.5 : 0.7;
+    hardAllowed = false;
+    longRunAllowed = painLevel < 7;
+    notes.push("Schmerzen nicht vollständig abgeklungen: kein intensives Training, Longrun begrenzt.");
+  } else if (missedSignals.pain > 0 && checkin.pain !== "better" && checkin.pain !== "none") {
+    factor *= 0.82;
+    hardAllowed = false;
+  }
+
+  if (checkin.illness === "symptoms") {
+    factor *= 0.35;
+    hardAllowed = false;
+    longRunAllowed = false;
+    notes.push("Noch Krankheitssymptome: nur sehr leichte Bewegung oder Pause einplanen.");
+  } else if (checkin.illness === "recovering") {
+    factor *= 0.62;
+    hardAllowed = false;
+    longRunAllowed = false;
+    notes.push("Noch nicht bei 100 %: stufenweiser Wiedereinstieg ohne harte Einheit.");
+  } else if (missedSignals.illness > 0 && checkin.illness !== "healthy") {
+    factor *= 0.75;
+    hardAllowed = false;
+  }
+
+  return { factor, hardAllowed, longRunAllowed, notes };
+}
+
+function highZoneShare(activity) {
+  return (activity?.heartRateZones?.zones || [])
+    .filter((zone) => Number(zone.zone) >= 4)
+    .reduce((sum, zone) => sum + Number(zone.percentage || 0), 0);
+}
+
+export function reviewGuidance(activities = [], reviews = {}, weekStart = new Date()) {
+  const cutoff = new Date(weekStart);
+  cutoff.setDate(cutoff.getDate() - 14);
+  const recent = activities.filter((activity) => {
+    const date = new Date(`${activityDate(activity)}T12:00:00`);
+    return date >= cutoff && date < weekStart && reviews[activity.id];
+  });
+
+  let factor = 1;
+  let hardAllowed = true;
+  let longRunAllowed = true;
+  let strengthFactor = 1;
+  let avoidDoubleStrength = false;
+  const notes = [];
+
+  const endurance = recent.filter((activity) => reviewKind(activity) === "endurance");
+  const strength = recent.filter((activity) => reviewKind(activity) === "strength");
+  const tired = endurance.filter((activity) => {
+    const review = reviews[activity.id];
+    return Number(review.legs || 5) <= 4 || Number(review.energy || 5) <= 4;
+  }).length;
+  const hard = endurance.filter((activity) => Number(reviews[activity.id]?.rpe || 5) >= 8).length;
+  const highHr = endurance.filter((activity) => {
+    const text = `${activity.name || ""} ${activity.type || ""}`.toLowerCase();
+    const intendedEasy = /locker|easy|recovery|longrun|long run|orc run/.test(text) && !/intervall|schwelle|tempo|race|wettkampf/.test(text);
+    return intendedEasy && highZoneShare(activity) >= 25 && Number(reviews[activity.id]?.rpe || 5) >= 6;
+  }).length;
+  const strong = endurance.filter((activity) => {
+    const review = reviews[activity.id];
+    return Number(review.legs || 0) >= 7 && Number(review.energy || 0) >= 7 && Number(review.rpe || 10) <= 5;
+  }).length;
+  const upperBodyLoad = strength.filter((activity) => {
+    const review = reviews[activity.id];
+    return Number(review.upperBodySoreness || 0) >= 6
+      || Number(review.backSoreness || 0) >= 5
+      || review.impactOnRunning === "deutlich";
+  }).length;
+
+  if (tired >= 2) {
+    factor *= 0.86;
+    hardAllowed = false;
+    notes.push("Mehrere Reviews zeigen niedrige Beine oder Energie: Umfang und Intensität werden reduziert.");
+  }
+  if (hard >= 2) {
+    factor *= 0.92;
+    hardAllowed = false;
+    notes.push("Die letzten Einheiten wurden mehrfach als sehr anstrengend bewertet: keine zusätzliche Qualitätseinheit.");
+  }
+  if (highHr >= 1) {
+    factor *= highHr >= 2 ? 0.86 : 0.93;
+    hardAllowed = false;
+    notes.push("Herzfrequenz war bei einem lockeren Lauf auffällig hoch: zunächst ruhiger planen und Entwicklung beobachten.");
+  }
+  if (upperBodyLoad >= 1) {
+    strengthFactor = upperBodyLoad >= 2 ? 0.55 : 0.7;
+    avoidDoubleStrength = true;
+    notes.push("Oberkörper/Rücken sind noch belastet: Rudern und Stabi werden verkürzt und nicht als hartes Doppeltraining gelegt.");
+  }
+  if (!tired && !hard && !highHr && strong >= 3) {
+    factor *= 1.03;
+    notes.push("Mehrere stabile Reviews erlauben einen kleinen, kontrollierten Aufbau.");
+  }
+
+  if (factor < 0.7) longRunAllowed = false;
+  return { factor, hardAllowed, longRunAllowed, strengthFactor, avoidDoubleStrength, notes, reviewed: recent.length };
+}
+
+function combineReadiness(checkinReadiness, reviewReadiness) {
+  return {
+    factor: checkinReadiness.factor * reviewReadiness.factor,
+    hardAllowed: checkinReadiness.hardAllowed && reviewReadiness.hardAllowed,
+    longRunAllowed: checkinReadiness.longRunAllowed && reviewReadiness.longRunAllowed,
+    strengthFactor: reviewReadiness.strengthFactor,
+    avoidDoubleStrength: reviewReadiness.avoidDoubleStrength,
+    notes: [...checkinReadiness.notes, ...reviewReadiness.notes],
+  };
 }
 
 function weatherForDate(forecast, date) {
@@ -73,50 +279,230 @@ function item(weekStart, dayIndex, values) {
   };
 }
 
-export function generateWeekPlan({ activities = [], mission, config, forecast = [], offsetWeeks = 0, completedRunningKm = 0, today = new Date() }) {
+function addStrengthSessions(plan, weekStart, config, readiness) {
+  const doubleDays = new Set(readiness.avoidDoubleStrength ? [] : (config.doubleTrainingDays || []));
+  const strengthFactor = Number(readiness.strengthFactor || 1);
+  const stabiDays = (config.stabiDays?.length ? config.stabiDays : ["Dienstag", "Donnerstag"]).slice(0, Number(config.stabiCount ?? 2));
+  const rowingDays = (config.rowingDays?.length ? config.rowingDays : ["Freitag"]).slice(0, Number(config.rowingCount ?? 1));
+
+  stabiDays.forEach((day, index) => {
+    if (DAY_INDEX[day] === undefined) return;
+    plan.push(item(weekStart, DAY_INDEX[day], {
+      time: doubleDays.has(day) ? "07:00" : "18:30",
+      title: strengthFactor < 0.8 ? "Leichte Mobilität" : "Stabi & Mobilität",
+      type: "Stabi",
+      distance: 0,
+      duration: Math.max(12, Math.round(Number(config.stabiDuration || 25) * strengthFactor)),
+      notes: strengthFactor < 0.8 ? "Review-Anpassung: nur Mobilität, Aktivierung und saubere Bewegung." : "Fester Bestandteil: Rumpf, Rücken, Hüfte und Füße.",
+      optional: strengthFactor < 0.65,
+      doubleSession: doubleDays.has(day),
+      sequence: index + 1,
+    }));
+  });
+
+  rowingDays.forEach((day, index) => {
+    if (DAY_INDEX[day] === undefined) return;
+    plan.push(item(weekStart, DAY_INDEX[day], {
+      time: doubleDays.has(day) ? "07:00" : "18:30",
+      title: strengthFactor < 0.8 ? "Rudern sehr locker" : "Rudern locker",
+      type: "Rudern",
+      distance: 0,
+      duration: Math.max(15, Math.round(Number(config.rowingDuration || 40) * strengthFactor)),
+      notes: strengthFactor < 0.8 ? "Review-Anpassung: niedriger Widerstand, kein Druck auf Rücken und Schultern." : "Ruhige Grundlageneinheit ohne zusätzliche Stoßbelastung.",
+      optional: strengthFactor < 0.65,
+      doubleSession: doubleDays.has(day),
+      sequence: index + 1,
+    }));
+  });
+}
+
+function distributeEasyKilometers(plan, weekStart, target, fixedKm, config, phase, readiness, cycle) {
+  const allowed = new Set(config.runDays?.length ? config.runDays : ["Dienstag", "Mittwoch", "Freitag", "Samstag", "Sonntag"]);
+  const candidates = ["Dienstag", "Freitag", "Donnerstag", "Montag"].filter((day) => allowed.has(day));
+  const remaining = Math.max(0, target - fixedKm);
+  const desiredSessions = target >= 75 ? 3 : remaining > 12 ? 2 : 1;
+  const sessionCount = Math.min(desiredSessions, candidates.length);
+  if (!sessionCount || remaining < 3) return;
+
+  const weights = sessionCount === 1 ? [1] : sessionCount === 2 ? [0.55, 0.45] : [0.4, 0.34, 0.26];
+  candidates.slice(0, sessionCount).forEach((day, index) => {
+    const distance = Math.max(4, Math.round(remaining * weights[index]));
+    const quality = day === "Freitag" && readiness.hardAllowed && ["build", "specific"].includes(phase.key) && cycle >= 2 && target >= 45;
+    plan.push(item(weekStart, DAY_INDEX[day], {
+      time: day === "Montag" ? "07:00" : "18:00",
+      title: quality ? `${distance} km mit Schwellenblock` : `${distance} km locker`,
+      type: quality ? "Schwellenlauf" : "Easy Run",
+      distance,
+      duration: Math.round(distance * 6.4),
+      notes: quality
+        ? "Nur kontrolliert: Einlaufen, kurzer Schwellenblock, auslaufen. Fußball zählt bereits als intensive Belastung."
+        : "Locker laufen, keine Pace erzwingen.",
+      optional: index === sessionCount - 1 && target >= 55,
+      doubleSession: day === "Montag" || (config.doubleTrainingDays || []).includes(day),
+    }));
+  });
+}
+
+export function generateWeekPlan({
+  activities = [],
+  planHistory = [],
+  mission,
+  config = {},
+  forecast = [],
+  offsetWeeks = 0,
+  completedRunningKm = 0,
+  reviews = {},
+  today = new Date(),
+}) {
   const weekStart = startOfWeek(new Date(), offsetWeeks);
-  const recentAverage = recentRunningKilometers(activities, weekStart);
-  const configuredTarget = Number(config.weeklyTarget || mission?.weeklyTarget || 60);
-  const target = Math.max(25, Math.round(recentAverage > 0 ? Math.min(configuredTarget, recentAverage * 1.12) : configuredTarget));
-  const longRun = Math.max(14, Math.min(Math.round(target * 0.38), Number(config.maxLongRun || 36)));
-  const wednesdayKm = Number(config.orcDistance || 10);
-  const saturdayKm = Number(config.orcTrackDistance || 8);
-  const footballEquivalent = Number(config.footballEquivalentKm || 7);
-  const remaining = Math.max(12, target - longRun - wednesdayKm - footballEquivalent);
-  const tuesdayKm = Math.max(6, Math.round(remaining * 0.48));
-  const fridayKm = Math.max(5, remaining - tuesdayKm);
+  const nextWeekStart = startOfWeek(today, 1);
+  const historyCutoff = weekStart > nextWeekStart ? nextWeekStart : weekStart;
+  const history = runningWeeks(activities, historyCutoff, 8);
+  const recentAverage = weightedAverage(history.map((week) => week.km));
+  const recentPeak = Math.max(...history.slice(0, 4).map((week) => week.km), recentAverage, 0);
+  const lastWeek = history[0]?.km || recentAverage;
+  const longestRecent = recentLongestRun(activities, historyCutoff);
+  const daysLeft = daysToMission(mission, weekStart);
+  const phase = trainingPhase(daysLeft);
+  const cycle = cycleWeek(mission, weekStart);
+  const recoveryWeek = cycle === 4;
+  const missedSignals = recentMissedSignals(planHistory, historyCutoff);
+  const checkinReadiness = readinessDecision(config, missedSignals);
+  const reviewReference = weekStart > today ? weekStart : new Date(today.getTime() + DAY_MS);
+  const reviewReadiness = reviewGuidance(activities, reviews, reviewReference);
+  const readiness = combineReadiness(checkinReadiness, reviewReadiness);
+
+  const base = recentAverage || Math.max(25, Math.min(45, Number(mission?.targetKm || 50) * 0.4));
+  const cycleFactor = recoveryWeek ? 0.75 : [1, 1.04, 1.08][cycle - 1] || 1;
+  let target = base * cycleFactor * phase.factor * readiness.factor;
+
+  if (!recoveryWeek && phase.key !== "taper" && lastWeek > 0) target = Math.min(target, lastWeek * 1.1);
+  if (recentPeak > 0 && !recoveryWeek && phase.key !== "taper") target = Math.min(target, recentPeak * 1.1);
+  target = Math.max(readiness.longRunAllowed ? 22 : 12, Math.round(target));
+
+  const allowedRuns = new Set(config.runDays?.length ? config.runDays : ["Dienstag", "Mittwoch", "Freitag", "Samstag", "Sonntag"]);
+  const wednesdayKm = allowedRuns.has("Mittwoch") ? Math.min(10, Math.max(6, Math.round(target * 0.18))) : 0;
+  const saturdayKm = allowedRuns.has("Samstag") && target >= 42 && phase.key !== "taper" && readiness.longRunAllowed ? Math.min(10, Math.max(6, Math.round(target * 0.13))) : 0;
+  const desiredLong = Math.round(target * phase.longShare * (recoveryWeek ? 0.82 : 1));
+  const progressionCap = longestRecent > 0 ? Math.max(14, Math.round(longestRecent * 1.12)) : desiredLong;
+  const longRun = readiness.longRunAllowed
+    ? Math.max(12, Math.min(desiredLong, progressionCap, Number(config.maxLongRun || 38)))
+    : 0;
 
   const fridayWeather = weatherDecision(weatherForDate(forecast, dateForDay(weekStart, 4)), config);
   const sundayWeather = weatherDecision(weatherForDate(forecast, dateForDay(weekStart, 6)), config);
 
   let plan = [
-    item(weekStart, 0, { time: config.footballTime || "19:00", title: "Fußball", type: "Fußball", distance: 0, notes: "Fixe intensive Einheit. Zählt als Belastung, aber nicht als Laufkilometer.", optional: false, fixed: true }),
-    item(weekStart, 1, { time: "18:00", title: `${tuesdayKm} km locker`, type: "Easy Run", distance: tuesdayKm, notes: "Locker laufen, keine Pace erzwingen.", optional: false }),
-    item(weekStart, 2, { time: config.orcTime || "19:00", title: "ORC Run", type: "ORC Run", distance: wednesdayKm, notes: "Fixer Gruppenlauf. Intensität an die Beine nach dem Fußball anpassen.", optional: false, fixed: true }),
-    item(weekStart, 4, { time: "18:00", title: fridayWeather?.indoor ? `${fridayKm} km Laufband` : `${fridayKm} km Recovery`, type: fridayWeather?.indoor ? "Laufband" : "Easy Run", distance: fridayKm, notes: fridayWeather?.indoor ? `Wetteranpassung: ${fridayWeather.tooHot ? "zu warm" : fridayWeather.tooWindy ? "stürmisch" : "Gewitterrisiko"}. Locker auf dem Laufband.` : "Sehr locker. Bei schweren Beinen kürzen oder auslassen.", optional: true, weatherAdjusted: Boolean(fridayWeather?.indoor) }),
-    item(weekStart, 5, { time: config.orcTrackTime || "09:00", title: "ORC Track", type: "ORC Track", distance: saturdayKm, notes: "Optional. Nur mitnehmen, wenn die Beine frisch sind; sonst Ruhetag.", optional: true, fixed: true }),
-    item(weekStart, 6, { time: sundayWeather?.tooHot ? "07:00" : "09:00", title: `${longRun} km Longrun`, type: sundayWeather?.indoor ? "Laufband" : "Long Run", distance: longRun, notes: sundayWeather?.indoor ? `Wetteranpassung: ${sundayWeather.tooHot ? "früh starten oder Laufband" : "bei Sturm/Gewitter auf das Laufband wechseln"}. Fuel und Trinken testen.` : "Ruhig und kontrolliert. Fuel und Trinken für den Ultra testen.", optional: false, weatherAdjusted: Boolean(sundayWeather?.indoor) }),
+    item(weekStart, 0, {
+      time: config.footballTime || "19:00",
+      title: "Fußball",
+      type: "Fußball",
+      distance: 0,
+      notes: "Fixe intensive Einheit. Wird als Belastung berücksichtigt, aber nicht als Laufkilometer.",
+      optional: false,
+      fixed: true,
+    }),
   ];
 
-  const dayIndex = { Montag: 0, Dienstag: 1, Mittwoch: 2, Donnerstag: 3, Freitag: 4, Samstag: 5, Sonntag: 6 };
-  const stabiDays = (config.stabiDays?.length ? config.stabiDays : ["Donnerstag", "Sonntag"]).slice(0, Number(config.stabiCount ?? 2));
-  const rowingDays = (config.rowingDays?.length ? config.rowingDays : ["Donnerstag"]).slice(0, Number(config.rowingCount ?? 1));
-  const extraRunDays = (config.extraRunDays || []).slice(0, Number(config.extraRunCount || 0));
-  const doubleDays = new Set(config.doubleTrainingDays || []);
+  if (wednesdayKm > 0) {
+    plan.push(item(weekStart, 2, {
+      time: config.orcTime || "19:00",
+      title: "ORC Run",
+      type: "ORC Run",
+      distance: wednesdayKm,
+      notes: "Fixer Gruppenlauf. Intensität nach dem Fußball kontrolliert halten.",
+      optional: false,
+      fixed: true,
+    }));
+  }
 
-  stabiDays.forEach((day, index) => {
-    if (dayIndex[day] === undefined) return;
-    plan.push(item(weekStart, dayIndex[day], { time: doubleDays.has(day) ? "07:00" : "18:30", title: "Stabi & Mobilität", type: "Stabi", distance: 0, duration: Number(config.stabiDuration || 25), notes: "Fester Bestandteil: Rumpf, Rücken, Hüfte und Füße.", optional: false, doubleSession: doubleDays.has(day), sequence: index + 1 }));
-  });
-  rowingDays.forEach((day, index) => {
-    if (dayIndex[day] === undefined) return;
-    plan.push(item(weekStart, dayIndex[day], { time: doubleDays.has(day) ? "07:00" : "18:30", title: "Rudern locker", type: "Rudern", distance: 0, duration: Number(config.rowingDuration || 40), notes: "Fester Bestandteil: ruhige Grundlageneinheit ohne zusätzliche Laufbelastung.", optional: false, doubleSession: doubleDays.has(day), sequence: index + 1 }));
-  });
-  extraRunDays.forEach((day) => {
-    if (dayIndex[day] === undefined) return;
-    const km = Number(config.extraRunDistance || 6);
-    plan.push(item(weekStart, dayIndex[day], { time: doubleDays.has(day) ? "07:00" : "18:00", title: `${km} km Zusatzlauf`, type: "Easy Run", distance: km, duration: Math.round(km * 6.5), notes: "Zusätzlicher Umfang. Locker laufen und bei Müdigkeit zuerst diese Einheit streichen.", optional: true, doubleSession: true }));
-  });
+  if (saturdayKm > 0) {
+    plan.push(item(weekStart, 5, {
+      time: config.orcTrackTime || "09:00",
+      title: "ORC Track",
+      type: "ORC Track",
+      distance: saturdayKm,
+      notes: phase.key === "specific" ? "Optionaler Vorbelastungslauf vor dem Longrun." : "Optional. Nur bei guten Beinen mitnehmen.",
+      optional: true,
+      fixed: true,
+    }));
+  }
+
+  if (longRun > 0 && allowedRuns.has("Sonntag")) {
+    plan.push(item(weekStart, 6, {
+      time: sundayWeather?.tooHot ? "07:00" : "09:00",
+      title: `${longRun} km Longrun`,
+      type: sundayWeather?.indoor ? "Laufband" : phase.key === "specific" && saturdayKm > 0 ? "Backyard Training" : "Long Run",
+      distance: longRun,
+      notes: sundayWeather?.indoor
+        ? `Wetteranpassung: ${sundayWeather.tooHot ? "früh starten oder Laufband" : "bei Sturm/Gewitter nach innen wechseln"}. Fuel und Trinken testen.`
+        : "Ruhig und kontrolliert. Fuel, Trinken und Zeit auf den Beinen testen.",
+      optional: false,
+      weatherAdjusted: Boolean(sundayWeather?.indoor),
+    }));
+  }
+
+  const fixedKm = wednesdayKm + saturdayKm + longRun;
+  distributeEasyKilometers(plan, weekStart, target, fixedKm, config, phase, readiness, cycle);
+  addStrengthSessions(plan, weekStart, config, readiness);
+
+  if (!readiness.hardAllowed) {
+    const painLevel = Number(config.checkin?.painLevel || 0);
+    plan = plan
+      .filter((entry) => !(painLevel >= 4 && ["Fußball", "ORC Track"].includes(entry.type)))
+      .map((entry) => {
+        if (["Schwellenlauf", "Intervalle"].includes(entry.type)) {
+          return { ...entry, type: "Easy Run", title: `${entry.distance} km locker`, notes: "Qualität wegen Check-in ausgesetzt. Nur locker laufen." };
+        }
+        if (entry.type === "Fußball") {
+          return { ...entry, optional: true, title: "Fußball nur bei guten Beinen", notes: "Check-in zeigt eingeschränkte Bereitschaft. Nur teilnehmen, wenn du dich beim Aufwärmen normal und beschwerdefrei fühlst." };
+        }
+        if (entry.type === "ORC Track") {
+          return { ...entry, optional: true, title: "ORC Track sehr locker oder auslassen", notes: "Keine harte Bahn-/Tempoeinheit in dieser Woche." };
+        }
+        return entry;
+      });
+  }
+
+  if (config.checkin?.illness === "recovering") {
+    plan = plan
+      .filter((entry) => !["Fußball", "ORC Track", "Backyard Training", "Long Run"].includes(entry.type))
+      .map((entry) => {
+        if (["ORC Run", "Easy Run", "Laufband", "Schwellenlauf"].includes(entry.type)) {
+          const distance = Math.min(6, Math.max(3, Number(entry.distance || 4)));
+          return {
+            ...entry,
+            type: "Easy Run",
+            title: `${distance} km Wiedereinstieg`,
+            distance,
+            optional: true,
+            notes: "Nur locker und nur, wenn du dich im Alltag wieder normal fühlst. Bei Verschlechterung abbrechen.",
+          };
+        }
+        if (entry.type === "Rudern") return { ...entry, duration: Math.min(25, entry.duration || 25), optional: true, notes: "Sehr locker als Wiedereinstieg; kein Druck." };
+        if (entry.type === "Stabi") return { ...entry, title: "Leichte Mobilität", duration: Math.min(20, entry.duration || 20), optional: true, notes: "Nur Mobilität und Aktivierung, kein anstrengendes Krafttraining." };
+        return entry;
+      });
+  }
+
+  if (config.checkin?.illness === "symptoms") {
+    plan = plan.filter((entry) => entry.type === "Stabi").map((entry) => ({
+      ...entry,
+      title: "Optionale leichte Mobilität",
+      duration: Math.min(15, entry.duration || 15),
+      optional: true,
+      notes: "Nur wenn du dich dabei gut fühlst. Kein Training gegen Krankheitssymptome erzwingen.",
+    }));
+    plan.push(item(weekStart, 1, {
+      time: "18:00",
+      title: "Erholen & neu bewerten",
+      type: "Ruhetag",
+      distance: 0,
+      duration: 0,
+      notes: "Bei Fieber, Brustschmerz, Atemnot oder deutlicher Verschlechterung nicht trainieren und medizinisch abklären.",
+      optional: false,
+    }));
+  }
 
   const todayKey = isoDate(today);
   if (offsetWeeks === 0) {
@@ -129,12 +515,32 @@ export function generateWeekPlan({ activities = [], mission, config, forecast = 
       plan = plan.map((entry) => {
         if (!runEntries.some((runEntry) => runEntry.id === entry.id)) return entry;
         const adjusted = Math.max(entry.optional ? 0 : 3, Math.round(Number(entry.distance || 0) * factor));
-        return { ...entry, distance: adjusted, title: entry.title.replace(/^\d+(?:[.,]\d+)?\s*km/, `${adjusted} km`), notes: `${entry.notes} Bereits absolvierte Laufkilometer dieser Woche wurden berücksichtigt.` };
-      }).filter((entry) => Number(entry.distance || 0) > 0 || ["Fußball", "Stabi", "Rudern"].includes(entry.type));
+        return {
+          ...entry,
+          distance: adjusted,
+          title: entry.title.replace(/^\d+(?:[.,]\d+)?\s*km/, `${adjusted} km`),
+          notes: `${entry.notes} Bereits absolvierte Laufkilometer dieser Woche wurden berücksichtigt.`,
+        };
+      }).filter((entry) => Number(entry.distance || 0) > 0 || ["Fußball", "Stabi", "Rudern", "Ruhetag"].includes(entry.type));
     }
   }
 
-  return { plan, target, remainingTarget: Math.max(0, target - Number(completedRunningKm || 0)), recentAverage: Math.round(recentAverage), weekStart: isoDate(weekStart) };
+  plan.sort((a, b) => `${a.date}${a.time || ""}`.localeCompare(`${b.date}${b.time || ""}`));
+
+  return {
+    plan,
+    target,
+    remainingTarget: Math.max(0, target - Number(completedRunningKm || 0)),
+    recentAverage: Math.round(recentAverage),
+    weekStart: isoDate(weekStart),
+    phase,
+    cycleWeek: cycle,
+    recoveryWeek,
+    readiness,
+    daysLeft,
+    history: history.map((week) => ({ start: isoDate(week.start), km: Math.round(week.km * 10) / 10 })),
+    weatherNote: fridayWeather?.indoor ? "Freitag wetterbedingt angepasst." : "",
+  };
 }
 
 export async function fetchWeeklyForecast(latitude, longitude, weekStart) {

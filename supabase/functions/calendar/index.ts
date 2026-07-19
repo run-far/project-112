@@ -55,7 +55,7 @@ function buildCalendar(plan: Record<string, unknown>[]) {
         `DTSTAMP:${stamp}`,
         `DTSTART;TZID=Europe/Berlin:${range.start}`,
         `DTEND;TZID=Europe/Berlin:${range.end}`,
-        `SUMMARY:${escapeIcs(`StrideHQ – ${item.title || item.type || "Training"}`)}`,
+        `SUMMARY:${escapeIcs(`Endurance Intelligence – ${item.title || item.type || "Training"}`)}`,
         `DESCRIPTION:${escapeIcs(description)}`,
         "END:VEVENT",
       ].join("\r\n");
@@ -65,10 +65,10 @@ function buildCalendar(plan: Record<string, unknown>[]) {
   return [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//StrideHQ//Training Calendar//DE",
+    "PRODID:-//Endurance Intelligence//Training Calendar//DE",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
-    "X-WR-CALNAME:StrideHQ Trainingsplan",
+    "X-WR-CALNAME:Endurance Intelligence Trainingsplan",
     "X-WR-TIMEZONE:Europe/Berlin",
     ...events,
     "END:VCALENDAR",
