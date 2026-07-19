@@ -13,11 +13,26 @@ import {
 } from "../services/plannerEngine";
 import { downloadCalendar } from "../services/calendar";
 import { preferredActivities } from "../services/activityUtils";
+import { publishIntervalsWeek } from "../services/intervals";
 import "./Planner.css";
 
 const dayFormatter = new Intl.DateTimeFormat("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
 const reasonOptions = ["Keine Zeit", "Müde", "Schmerzen", "Krankheit", "Wetter", "Verschoben", "Bewusst ausgelassen", "Aktivität nicht erkannt", "Sonstiges"];
 const plannerDays = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
+
+function planFingerprint(plan) {
+  return JSON.stringify(plan.map((item) => ({
+    id: item.id,
+    date: item.date,
+    time: item.time,
+    title: item.title,
+    type: item.type,
+    distance: Number(item.distance || 0),
+    duration: Number(item.duration || 0),
+    optional: Boolean(item.optional),
+    notes: item.notes || "",
+  })).sort((a, b) => `${a.date}${a.time}${a.id}`.localeCompare(`${b.date}${b.time}${b.id}`)));
+}
 
 function createBlank(weekStart) {
   const date = dateForDay(weekStart, 1);
@@ -130,6 +145,8 @@ export default function Planner() {
   const [planningOpen, setPlanningOpen] = useState(false);
   const [planningDraft, setPlanningDraft] = useState(null);
   const [overwriteConfirmOpen, setOverwriteConfirmOpen] = useState(false);
+  const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
+  const [publishBusy, setPublishBusy] = useState(false);
 
   const weekStart = useMemo(() => startOfWeek(new Date(), offsetWeeks), [offsetWeeks]);
   const weekEnd = dateForDay(weekStart, 6);
@@ -160,6 +177,11 @@ export default function Planner() {
   const coachReviewReference = useMemo(() => offsetWeeks === 0 ? new Date(Date.now() + 86400000) : weekStart, [offsetWeeks, weekStart]);
   const coachGuidance = useMemo(() => reviewGuidance(canonicalActivities, state.reviews, coachReviewReference), [canonicalActivities, state.reviews, coachReviewReference]);
   const replaceableCurrentEntries = weekPlan.filter((item) => item.source === "planner-engine" && !item.completed && !item.missedReason && item.date >= todayKey);
+  const publishablePlan = useMemo(() => weekPlan.filter((item) => !item.completed && !item.missedReason && (offsetWeeks > 0 || item.date >= todayKey)), [weekPlan, offsetWeeks, todayKey]);
+  const weekKey = isoDate(weekStart);
+  const currentPlanFingerprint = useMemo(() => planFingerprint(publishablePlan), [publishablePlan]);
+  const publishedWeek = config.intervalSync?.[weekKey] || null;
+  const planChangedAfterPublish = Boolean(publishedWeek && publishedWeek.fingerprint !== currentPlanFingerprint);
 
   useEffect(() => {
     const updates = [...matches.entries()].filter(([id, activity]) => {
@@ -296,6 +318,52 @@ export default function Planner() {
     setPlanningOpen(false);
   }
 
+  async function publishWeek() {
+    setPublishBusy(true);
+    setStatus("Übertrage den bestätigten Wochenplan an Intervals.icu …");
+    try {
+      const result = await publishIntervalsWeek({
+        weekStart: isoDate(weekStart),
+        weekEnd: isoDate(weekEnd),
+        plan: publishablePlan,
+      });
+      const publishedAt = result.publishedAt || new Date().toISOString();
+      setState((current) => ({
+        ...current,
+        plan: current.plan.map((item) => publishablePlan.some((entry) => entry.id === item.id)
+          ? { ...item, intervalsPublishedAt: publishedAt }
+          : item),
+        planner: {
+          ...current.planner,
+          intervalSync: {
+            ...(current.planner?.intervalSync || {}),
+            [weekKey]: {
+              publishedAt,
+              fingerprint: currentPlanFingerprint,
+              uploaded: Number(result.uploaded || publishablePlan.length),
+              guided: Number(result.guided || 0),
+              notes: Number(result.notes || 0),
+            },
+          },
+        },
+      }));
+      setStatus(`${Number(result.uploaded || publishablePlan.length)} Einheiten an Intervals.icu gesendet · ${Number(result.guided || 0)} geführte Garmin-Workouts · ${Number(result.notes || 0)} Kalendereinträge.`);
+      setPublishConfirmOpen(false);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPublishBusy(false);
+    }
+  }
+
+  function requestPublish() {
+    if (!state.intervals?.connected) {
+      setStatus("Intervals.icu ist noch nicht verbunden. Bitte zuerst unter Einstellungen die Verbindung prüfen.");
+      return;
+    }
+    setPublishConfirmOpen(true);
+  }
+
   function saveWorkout(event) {
     event.preventDefault();
     if (!editing?.title.trim()) return;
@@ -378,6 +446,9 @@ export default function Planner() {
       <PageTitle eyebrow="Wochenplaner" title="Deine Woche">
         <div className="page-actions">
           <button onClick={() => downloadCalendar(weekPlan)}>Kalender laden</button>
+          <button className={publishedWeek && !planChangedAfterPublish ? "intervals-published-button" : ""} onClick={requestPublish} disabled={publishBusy || (!publishedWeek && publishablePlan.length === 0)}>
+            {publishBusy ? "Wird gesendet …" : publishedWeek ? (planChangedAfterPublish ? "Garmin-Plan aktualisieren" : "✓ An Garmin gesendet") : "Woche bestätigen & an Garmin senden"}
+          </button>
           <button className="primary planner-generate" onClick={requestPlanning}>✦ Woche intelligent planen</button>
         </div>
       </PageTitle>
@@ -411,6 +482,17 @@ export default function Planner() {
           <ul>{coachGuidance.notes.map((note) => <li key={note}>{note}</li>)}</ul>
         ) : <p className="muted">Umfang und Intensität bleiben innerhalb des missionsbasierten 3:1-Rahmens.</p>}
       </Card>
+
+      {publishedWeek && (
+        <Card className={`wide planner-sync-card ${planChangedAfterPublish ? "dirty" : "synced"}`}>
+          <div>
+            <p className="eyebrow">Intervals.icu → Garmin</p>
+            <h2>{planChangedAfterPublish ? "Plan wurde nach der Übertragung geändert" : "Wochenplan ist veröffentlicht"}</h2>
+            <p className="muted">{planChangedAfterPublish ? "Sende die Woche erneut, damit Intervals.icu und Garmin den aktuellen Stand erhalten." : `${publishedWeek.guided || 0} geführte Workouts und ${publishedWeek.notes || 0} Kalendereinträge wurden übertragen.`}</p>
+          </div>
+          <button onClick={requestPublish}>{planChangedAfterPublish ? "Jetzt aktualisieren" : "Erneut senden"}</button>
+        </Card>
+      )}
 
       {status && <p className="planner-status">{status}</p>}
       {missed.length > 0 && (
@@ -465,6 +547,7 @@ export default function Planner() {
                       <div>
                         <span>{item.time} · {matched ? "ERLEDIGT" : isMissed ? "NICHT ERLEDIGT" : item.optional ? "OPTIONAL" : "PFLICHT"}</span>
                         {item.weatherAdjusted && <em>WETTER</em>}
+                        {item.intervalsPublishedAt && <em>INTERVALS</em>}
                         {matched && <em>{String(matched.source || item.actualSource || "Garmin").toUpperCase()}</em>}
                       </div>
                       <h3>{item.title}</h3>
@@ -486,6 +569,28 @@ export default function Planner() {
           );
         })}
       </div>
+
+      {publishConfirmOpen && (
+        <div className="modal-backdrop">
+          <div className="modal planner-publish-modal">
+            <button type="button" className="close" onClick={() => setPublishConfirmOpen(false)}>×</button>
+            <p className="eyebrow">Woche bestätigen</p>
+            <h2>Plan an Intervals.icu senden?</h2>
+            <p><strong>{publishablePlan.length}</strong> zukünftige Einheit{publishablePlan.length === 1 ? "" : "en"} werden für {dayFormatter.format(weekStart)} bis {dayFormatter.format(weekEnd)} veröffentlicht.</p>
+            <div className="planner-protection-list">
+              <span>✓ Lauf- und Radeinheiten werden als strukturierte Workouts angelegt</span>
+              <span>✓ Fußball, Stabi, Mobility und Rudern bleiben reine Kalendereinträge</span>
+              <span>✓ Erneutes Senden aktualisiert bestehende Einträge statt Duplikate anzulegen</span>
+              <span>✓ Entfernte Einheiten werden auch aus dieser Intervals-Woche entfernt</span>
+            </div>
+            <p className="muted">In Intervals.icu muss unter Garmin „Upload planned workouts“ aktiviert sein.</p>
+            <div className="modal-actions">
+              <button type="button" onClick={() => setPublishConfirmOpen(false)}>Abbrechen</button>
+              <button type="button" className="primary" disabled={publishBusy} onClick={publishWeek}>{publishBusy ? "Wird gesendet …" : "Bestätigen und senden"}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {overwriteConfirmOpen && (
         <div className="modal-backdrop">

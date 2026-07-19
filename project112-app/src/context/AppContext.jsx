@@ -12,19 +12,55 @@ function asArray(value, fallback = []) {
   return Array.isArray(value) ? value : fallback;
 }
 
+function normalizeInventory(activities, items, reviews) {
+  const trackingStart = new Date().toISOString().slice(0, 10);
+  const fuel = asArray(items).map((item) => ({
+    ...item,
+    stockTrackedFrom: item.stockTrackedFrom || trackingStart,
+  }));
+  const fuelById = new Map(fuel.map((item) => [item.id, item]));
+  const activityById = new Map(asArray(activities).map((activity) => [activity.id, activity]));
+  const restored = {};
+  const normalizedReviews = Object.fromEntries(Object.entries(reviews || {}).map(([activityId, review]) => {
+    const activity = activityById.get(activityId);
+    const activityDay = String(activity?.startDateLocal || activity?.date || "").slice(0, 10);
+    const nutritionItems = asArray(review?.nutritionItems).map((item) => {
+      if (typeof item.affectsInventory === "boolean") return item;
+      const product = fuelById.get(item.fuelItemId);
+      if (!product) return { ...item, affectsInventory: false };
+      const affectsInventory = !activityDay || activityDay >= product.stockTrackedFrom;
+      if (!affectsInventory) {
+        restored[product.id] = (restored[product.id] || 0) + (Number(item.quantity) || 0);
+      }
+      return { ...item, affectsInventory };
+    });
+    return [activityId, { ...review, nutritionItems }];
+  }));
+
+  return {
+    fuel: fuel.map((item) => restored[item.id]
+      ? { ...item, quantity: Number(item.quantity || 0) + Number(restored[item.id] || 0) }
+      : item),
+    reviews: normalizedReviews,
+  };
+}
+
 function mergeState(localState = {}, cloudState = {}) {
   const local = localState || {};
   const cloud = cloudState || {};
+  const activities = asArray(cloud.activities, asArray(local.activities));
+  const reviews = { ...(local.reviews || {}), ...(cloud.reviews || {}) };
+  const inventory = normalizeInventory(activities, cloud.fuel ?? local.fuel, reviews);
   return {
     ...defaultState,
     ...local,
     ...cloud,
-    activities: asArray(cloud.activities, asArray(local.activities)),
+    activities,
     plan: asArray(cloud.plan, asArray(local.plan)),
     equipment: asArray(cloud.equipment, asArray(local.equipment)),
-    fuel: asArray(cloud.fuel, asArray(local.fuel)),
+    fuel: inventory.fuel,
     healthCheckins: asArray(cloud.healthCheckins, asArray(local.healthCheckins)),
-    reviews: { ...(local.reviews || {}), ...(cloud.reviews || {}) },
+    reviews: inventory.reviews,
     mission: {
       ...defaultState.mission,
       ...(local.mission || {}),
@@ -58,7 +94,7 @@ function stateForCloud(state) {
 }
 
 export function AppProvider({ children }) {
-  const [state, setState] = useState(() => loadState(defaultState));
+  const [state, setState] = useState(() => mergeState(loadState(defaultState), {}));
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [cloudStatus, setCloudStatus] = useState("local");
@@ -311,7 +347,7 @@ export function AppProvider({ children }) {
     logout: signOut,
     upsertReview: (id, review) => setState((current) => {
       const usage = (items) => (Array.isArray(items) ? items : []).reduce((result, item) => {
-        if (!item.fuelItemId) return result;
+        if (!item.fuelItemId || item.affectsInventory === false) return result;
         result[item.fuelItemId] = (result[item.fuelItemId] || 0) + (Number(item.quantity) || 0);
         return result;
       }, {});

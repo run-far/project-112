@@ -112,6 +112,7 @@ export default function Fuel() {
             packageSize: product.packageSize || item.packageSize || "",
             source: product.source || item.source || "",
             archived: false,
+            stockTrackedFrom: item.stockTrackedFrom || new Date().toISOString().slice(0, 10),
           } : item),
         };
       }
@@ -136,6 +137,7 @@ export default function Fuel() {
             archived: false,
             rating: 0,
             tolerance: 0,
+            stockTrackedFrom: new Date().toISOString().slice(0, 10),
           },
         ],
       };
@@ -215,6 +217,7 @@ export default function Fuel() {
           <p className="eyebrow">{item.category}</p><h2>{item.brand ? `${item.brand} ${item.name}` : item.name}</h2>
           <div className="fuel-stats"><b>{item.carbs} g Carbs</b><span>{item.caffeine} mg Koffein</span></div>
           {item.barcode && <small className="fuel-barcode">Barcode {item.barcode}{item.source ? ` · ${item.source}` : ""}</small>}
+          <small className="fuel-stock-start">Bestand geführt seit {new Intl.DateTimeFormat("de-DE").format(new Date(`${item.stockTrackedFrom || new Date().toISOString().slice(0, 10)}T12:00:00`))}</small>
           <div className="qty"><button onClick={() => qty(item.id, -1)}>−</button><strong>{item.quantity} <small>{item.stockUnit || "Stück"}</small></strong><button onClick={() => qty(item.id, 1)}>+</button></div>
           {Number(item.quantity || 0) <= 2 && <p className="fuel-low-stock">Bestand wird knapp.</p>}
           <div className="event-actions"><button onClick={() => archive(item.id)}>Archivieren</button><button className="danger-button" onClick={() => remove(item.id)}>Löschen</button></div>

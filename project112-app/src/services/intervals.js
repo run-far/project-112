@@ -34,6 +34,11 @@ export async function syncIntervalsActivities(after = "2025-01-01") {
   return invokeIntervals("sync", { after });
 }
 
+export async function publishIntervalsWeek({ weekStart, weekEnd, plan }) {
+  return invokeIntervals("publish-plan", { weekStart, weekEnd, plan });
+}
+
+
 function zoneData(activity) {
   const times = Array.isArray(activity.icu_hr_zone_times) ? activity.icu_hr_zone_times.map(Number) : [];
   if (!times.length) return null;

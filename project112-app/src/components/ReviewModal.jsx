@@ -13,6 +13,7 @@ const emptyNutritionItem = () => ({
   manufacturer: "",
   quantity: "1",
   unit: "Stück",
+  affectsInventory: false,
 });
 
 function ZeroScore({ label, value, onChange, help }) {
@@ -31,7 +32,13 @@ export default function ReviewModal({ activity, onClose }) {
   const kind = reviewKind(activity);
   const old = state.reviews[activity.id] || {};
   const detectedEvent = isOfficialEvent(activity, old);
-  const oldNutrition = Array.isArray(old.nutritionItems) ? old.nutritionItems : [];
+  const activityDay = String(activity.startDateLocal || activity.date || "").slice(0, 10);
+  const inventoryApplies = (fuelItem) => Boolean(fuelItem && (!fuelItem.stockTrackedFrom || !activityDay || activityDay >= fuelItem.stockTrackedFrom));
+  const oldNutrition = (Array.isArray(old.nutritionItems) ? old.nutritionItems : []).map((item) => {
+    if (typeof item.affectsInventory === "boolean") return item;
+    const fuelItem = state.fuel.find((fuel) => fuel.id === item.fuelItemId);
+    return { ...item, affectsInventory: Boolean(item.fuelItemId && inventoryApplies(fuelItem)) };
+  });
   const [review, setReview] = useState({
     reviewType: old.reviewType || kind,
     legs: old.legs ?? 7,
@@ -89,7 +96,8 @@ export default function ReviewModal({ activity, onClose }) {
         if (item.id !== id) return item;
         if (key === "type") {
           const selected = state.fuel.find((fuel) => fuel.id === item.fuelItemId);
-          return { ...item, type: value, fuelItemId: selected && compatibleFuel(selected, value) ? item.fuelItemId : "" };
+          const keepFuel = selected && compatibleFuel(selected, value);
+          return { ...item, type: value, fuelItemId: keepFuel ? item.fuelItemId : "", affectsInventory: keepFuel ? item.affectsInventory : false };
         }
         return { ...item, [key]: value };
       }),
@@ -107,9 +115,11 @@ export default function ReviewModal({ activity, onClose }) {
         product: selected.name || "",
         unit: selected.stockUnit || "Stück",
         quantity: item.quantity || "1",
+        affectsInventory: inventoryApplies(selected),
       } : {
         ...item,
         fuelItemId: "",
+        affectsInventory: false,
       }),
     }));
   }
@@ -127,12 +137,12 @@ export default function ReviewModal({ activity, onClose }) {
     const nextNutrition = kind === "endurance" && review.usedNutrition ? review.nutritionItems : [];
     const previousNutrition = Array.isArray(old.nutritionItems) ? old.nutritionItems : [];
     const previousUsage = previousNutrition.reduce((usage, item) => {
-      if (!item.fuelItemId) return usage;
+      if (!item.fuelItemId || item.affectsInventory === false) return usage;
       usage[item.fuelItemId] = (usage[item.fuelItemId] || 0) + (Number(item.quantity) || 0);
       return usage;
     }, {});
     const nextUsage = nextNutrition.reduce((usage, item) => {
-      if (!item.fuelItemId) return usage;
+      if (!item.fuelItemId || item.affectsInventory === false) return usage;
       usage[item.fuelItemId] = (usage[item.fuelItemId] || 0) + (Number(item.quantity) || 0);
       return usage;
     }, {});
@@ -212,9 +222,16 @@ export default function ReviewModal({ activity, onClose }) {
                         <label className="nutrition-inventory-select">Produkt aus Fuel Lab
                           <select value={item.fuelItemId || ""} onChange={(event) => selectFuelItem(item.id, event.target.value)}>
                             <option value="">Freie Eingabe / kein Bestandsabzug</option>
-                            {state.fuel.filter((fuel) => !fuel.archived && compatibleFuel(fuel, item.type) && (Number(fuel.quantity || 0) > 0 || fuel.id === item.fuelItemId)).map((fuel) => <option key={fuel.id} value={fuel.id}>{fuel.brand ? `${fuel.brand} ` : ""}{fuel.name} · {fuel.quantity} {fuel.stockUnit || "Stück"}</option>)}
+                            {state.fuel.filter((fuel) => !fuel.archived && compatibleFuel(fuel, item.type)).map((fuel) => <option key={fuel.id} value={fuel.id}>{fuel.brand ? `${fuel.brand} ` : ""}{fuel.name} · {fuel.quantity} {fuel.stockUnit || "Stück"}</option>)}
                           </select>
-                          {item.fuelItemId && <small>Wird beim Speichern automatisch vom Bestand abgezogen.</small>}
+                          {item.fuelItemId && (
+                            <div className="inventory-impact-toggle">
+                              <input type="checkbox" checked={item.affectsInventory !== false} onChange={(event) => updateNutritionItem(item.id, "affectsInventory", event.target.checked)} />
+                              <span>Aktuellen Bestand reduzieren</span>
+                            </div>
+                          )}
+                          {item.fuelItemId && item.affectsInventory === false && <small>Historischer oder bereits verbrauchter Artikel – bleibt ohne Abzug vom heutigen Bestand.</small>}
+                          {item.fuelItemId && item.affectsInventory !== false && <small>Wird beim Speichern automatisch vom aktuellen Bestand abgezogen.</small>}
                         </label>
                         <label>Hersteller<input value={item.manufacturer} onChange={(event) => updateNutritionItem(item.id, "manufacturer", event.target.value)} placeholder="z. B. Maurten" /></label>
                         <label>Produkt<input value={item.product} onChange={(event) => updateNutritionItem(item.id, "product", event.target.value)} placeholder="z. B. Gel 100" /></label>

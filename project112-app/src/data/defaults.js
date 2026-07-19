@@ -54,6 +54,7 @@ export const defaultState = {
     footballTime: "19:00",
     orcTime: "19:00",
     orcTrackTime: "09:00",
+    intervalSync: {},
   },
   calendar: {
     id: crypto.randomUUID(),

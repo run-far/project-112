@@ -147,6 +147,7 @@ export default function Settings() {
           {state.intervals?.connected && <button className="secondary" onClick={syncIntervals} disabled={intervalsSyncStatus === "syncing"}>{intervalsSyncStatus === "syncing" ? "Synchronisiert …" : "Jetzt synchronisieren"}</button>}
         </div>
         <p className="muted">Einrichtung: Intervals.icu → Settings → Developer Settings → API Key erzeugen. Der Key wird ausschließlich als Supabase-Secret gespeichert.</p>
+        <p className="muted"><b>Garmin-Workouts:</b> In Intervals.icu unter Settings → Garmin „Upload planned workouts“ aktivieren. Danach kannst du bestätigte Wochen direkt aus dem Wochenplan senden.</p>
         {intervalsMessage && <p className="connection-message">{intervalsMessage}</p>}
       </Card>
 

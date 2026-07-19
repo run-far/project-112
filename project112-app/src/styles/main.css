@@ -105,3 +105,8 @@
 .inventory-nutrition-grid{grid-template-columns:.8fr 1.8fr 1fr 1.2fr .65fr .8fr}.nutrition-inventory-select{grid-column:span 2}.nutrition-inventory-select small{color:#75e8a6}.nutrition-grid select:disabled{opacity:.72;cursor:not-allowed}.review-save-error{margin:15px 0;padding:13px 15px;border:1px solid #754040;border-radius:12px;background:#251313;color:#ffadad}
 @media(max-width:1050px){.fuel-editor-form{grid-template-columns:repeat(2,minmax(0,1fr))}.inventory-nutrition-grid{grid-template-columns:1fr 1fr}.nutrition-inventory-select{grid-column:1/-1}}
 @media(max-width:700px){.fuel-photo-import{display:grid}.fuel-photo-actions,.fuel-photo-actions button{width:100%}.fuel-editor-form{grid-template-columns:1fr}.fuel-barcode-field{grid-column:auto}.fuel-product-card{grid-template-columns:80px minmax(0,1fr)}.fuel-product-image{width:80px;height:100px}.inventory-nutrition-grid{grid-template-columns:1fr}.nutrition-inventory-select{grid-column:auto}.inline-input-action{grid-template-columns:1fr}.inline-input-action button{width:100%}}
+
+/* v2.0 – inventory baseline and historical fuel consumption */
+.inventory-impact-toggle{display:flex!important;align-items:center;gap:8px;margin-top:8px;color:#d2dfd6!important;font-size:12px}
+.inventory-impact-toggle input{width:auto!important;accent-color:#5ee494}
+.fuel-stock-start{display:block;margin-top:5px;color:#718579}
